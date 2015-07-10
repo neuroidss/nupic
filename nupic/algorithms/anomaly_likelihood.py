@@ -103,6 +103,26 @@ class AnomalyLikelihood(object):
     self._reestimationPeriod = 100 
 
 
+  def __eq__(self, o):
+    return (isinstance(o, AnomalyLikelihood) and
+            self._iteration == o._iteration and
+            self._historicalScores == o._historicalScores and
+            self._distribution == o._distribution and
+            self._probationaryPeriod == o._probationaryPeriod and
+            self._claLearningPeriod == o._claLearningPeriod and
+            self._reestimationPeriod == o._reestimationPeriod)
+
+
+  def __str__(self):
+    return ("AnomalyLikelihood: %s %s %s %s %s %s" % (
+            self._iteration,
+            self._historicalScores,
+            self._distribution,
+            self._probationaryPeriod,
+            self._claLearningPeriod,
+            self._reestimationPeriod) )
+
+
   @staticmethod
   def computeLogLikelihood(likelihood):
     """
@@ -118,12 +138,16 @@ class AnomalyLikelihood(object):
 
   def anomalyProbability(self, value, anomalyScore, timestamp=None):
     """
-    Return the probability that the current value plus anomaly score represents
+    Compute the probability that the current value plus anomaly score represents
     an anomaly given the historical distribution of anomaly scores. The closer
     the number is to 1, the higher the chance it is an anomaly.
 
-    Given the current metric value, plus the current anomaly score, output the
-    anomalyLikelihood for this record.
+    @param value - the current metric ("raw") input value, eg. "orange", or 
+                   '21.2' (deg. Celsius), ...
+    @param anomalyScore - the current anomaly score
+    @param timestamp - (optional) timestamp of the ocurrence, 
+                       default (None) results in datetime.now()
+    @return theanomalyLikelihood for this record.
     """
     if timestamp is None:
       timestamp = datetime.datetime.now()
@@ -427,7 +451,7 @@ def updateAnomalyLikelihoods(anomalyScores,
 
 
 def _filterLikelihoods(likelihoods,
-                       redThreshold=0.9999, yellowThreshold=0.999):
+                       redThreshold=0.99999, yellowThreshold=0.999):
   """
   Filter the list of raw (pre-filtered) likelihoods so that we only preserve
   sharp increases in likelihood. 'likelihoods' can be a numpy array of floats or
@@ -437,24 +461,23 @@ def _filterLikelihoods(likelihoods,
   """
   redThreshold    = 1.0 - redThreshold
   yellowThreshold = 1.0 - yellowThreshold
-
+  
   # The first value is untouched
   filteredLikelihoods = [likelihoods[0]]
 
   for i, v in enumerate(likelihoods[1:]):
 
-    # If we are below threshold
     if v <= redThreshold:
+      # Value is in the redzone
 
-      # If previous value is above threshold
       if likelihoods[i] > redThreshold:
+        # Previous value is not in redzone, so leave as-is
         filteredLikelihoods.append(v)
-      # else set to a lower value
       else:
         filteredLikelihoods.append(yellowThreshold)
 
-    # If we're not above threshold, just stay as-is
     else:
+      # Value is below the redzone, so leave as-is
       filteredLikelihoods.append(v)
 
   return filteredLikelihoods
@@ -481,7 +504,7 @@ def _anomalyScoreMovingAverage(anomalyScores,
   for record in anomalyScores:
 
     # Skip (but log) records without correct number of entries
-    if len(record) != 3:
+    if not isinstance(record, (list, tuple)) or len(record) != 3:
       if verbosity >= 1:
         print "Malformed record:", record
       continue

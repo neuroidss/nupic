@@ -31,8 +31,10 @@ import numpy as np
 from nupic.data.fieldmeta import FieldMetaType
 import nupic.math.roc_utils as roc
 from nupic.data import SENTINEL_VALUE_FOR_MISSING_DATA
-from collections import deque
 from nupic.frameworks.opf.opfutils import InferenceType
+from nupic.utils import MovingAverage
+
+from collections import deque
 from operator import itemgetter
 from safe_interpreter import SafeInterpreter
 from io import BytesIO, StringIO
@@ -41,6 +43,7 @@ from functools import partial
 ###############################################################################
 # Public Metric specification class
 ###############################################################################
+
 class MetricSpec(object):
   """ This class represents a single Metrics specification in the TaskControl
   block
@@ -133,7 +136,6 @@ class MetricSpec(object):
     return infType
 
 
-################################################################################
 
 def getModule(metricSpec):
   """
@@ -184,54 +186,15 @@ def getModule(metricSpec):
     return MetricAltMAPE(metricSpec)
   elif metricName == 'MAPE':
     return MetricMAPE(metricSpec)
-
+  elif metricName == 'multi':
+    return MetricMulti(metricSpec)
   else:
     raise Exception("Unsupported metric type: %s" % metricName)
 
 ################################################################################
 #               Helper Methods and Classes                                    #
 ################################################################################
-class _MovingAverage(object):
-  """ Helper class for computing windowed moving
-  averages of arbitrary values """
-  def __init__(self, windowSize = None):
-    """
-    Parameters:
-    -----------------------------------------------------------------------
-    windowSize:             The number of values that are used to compute the
-                            moving average. If the window is not specified,
-                            this returns an average over all the input values
-    """
-    self._windowSize = windowSize
-    self._sum = 0.0
-    self._n = 0
-    self._history = None
 
-    if windowSize is not None and windowSize > 1:
-      self._history = deque([])
-
-  def __call__(self, value):
-    if self._windowSize == 1:
-      return value
-
-    self._sum += value
-    self._n += 1
-
-    if self._windowSize is None:
-      return self._sum/self._n
-    else:
-      self._history.append(value)
-      if len(self._history) > self._windowSize:
-        oldVal = self._history.popleft()
-        self._sum -= oldVal
-      return self._sum/len(self._history)
-
-  def clear(self):
-    if self._history is not None:
-      self._history.clear()
-    self._sum = 0.0
-
-############################################################################
 class _MovingMode(object):
   """ Helper class for computing windowed moving
   mode of arbitrary values """
@@ -270,12 +233,12 @@ class _MovingMode(object):
     return pred
 
 
-############################################################################
+
 def _isNumber(value):
   return isinstance(value, (numbers.Number, np.number))
 
 
-################################################################################
+
 class MetricsIface(object):
   """
   A Metrics module compares a prediction Y to corresponding ground truth X and returns a single
@@ -328,7 +291,8 @@ class MetricsIface(object):
 
     """
 
-################################################################################
+
+
 class AggregateMetric(MetricsIface):
   """
       Partial implementation of Metrics Interface for metrics that
@@ -338,7 +302,7 @@ class AggregateMetric(MetricsIface):
   """
   ___metaclass__ = ABCMeta
 
-
+  #FIXME @abstractmethod - this should be marked abstract method and required to be implemented
   def accumulate(self, groundTruth, prediction, accumulatedError, historyBuffer):
     """
         Updates the accumulated error given the prediction and the
@@ -365,6 +329,7 @@ class AggregateMetric(MetricsIface):
             self.spec.params["window"] indicates the maximum size of the window
     """
 
+  #FIXME @abstractmethod - this should be marked abstract method and required to be implemented
   def aggregate(self, accumulatedError, historyBuffer, steps):
     """
         Updates the final aggregated score error given the prediction and the
@@ -396,6 +361,7 @@ class AggregateMetric(MetricsIface):
     """
 
     # Init default member variables
+    self.id = None
     self.verbosity = 0
     self.window = -1
     self.history = None
@@ -425,8 +391,9 @@ class AggregateMetric(MetricsIface):
     self._maxRecords = None
 
     # Parse the metric's parameters
-    if metricSpec.params is not None:
+    if metricSpec is not None and metricSpec.params is not None:
       
+      self.id = metricSpec.params.get('id', None)
       self._predictionSteps = metricSpec.params.get('steps', [0])
       # Make sure _predictionSteps is a list
       if not hasattr(self._predictionSteps, '__iter__'):
@@ -514,7 +481,8 @@ class AggregateMetric(MetricsIface):
                                          self.steps)
     return self.aggregateError
 
-################################################################################
+
+
 class MetricRMSE(AggregateMetric):
   """
       computes root-mean-square error
@@ -538,7 +506,7 @@ class MetricRMSE(AggregateMetric):
     return np.sqrt(accumulatedError / float(n))
 
 
-################################################################################
+
 class MetricAAE(AggregateMetric):
   """
       computes average absolute error
@@ -561,7 +529,8 @@ class MetricAAE(AggregateMetric):
 
     return accumulatedError/ float(n)
 
-################################################################################
+
+
 class MetricAltMAPE(AggregateMetric):
   """
   computes the "Alternative" Mean Absolute Percent Error.
@@ -620,7 +589,7 @@ class MetricAltMAPE(AggregateMetric):
     return self.aggregateError
 
 
-################################################################################
+
 class MetricMAPE(AggregateMetric):
   """
   computes the "Classic" Mean Absolute Percent Error.
@@ -680,7 +649,7 @@ class MetricMAPE(AggregateMetric):
     return self.aggregateError
 
 
-################################################################################
+
 class MetricPassThruPrediction(MetricsIface):
   """
   This is not a metric, but rather a facility for passing the predictions
@@ -697,7 +666,7 @@ class MetricPassThruPrediction(MetricsIface):
   def __init__(self, metricSpec):
     self.spec = metricSpec
     self.window = metricSpec.params.get("window", 1)
-    self.avg = _MovingAverage(self.window)
+    self.avg = MovingAverage(self.window)
     
     self.value = None
     
@@ -720,7 +689,6 @@ class MetricPassThruPrediction(MetricsIface):
 
 
 
-################################################################################
 class MetricMovingMean(AggregateMetric):
   """
       computes error metric based on moving mean prediction
@@ -742,7 +710,7 @@ class MetricMovingMean(AggregateMetric):
       self.mean_window = metricSpec.params['mean_window']
 
     # Construct moving average instance
-    self._movingAverage = _MovingAverage(self.mean_window)
+    self._movingAverage = MovingAverage(self.mean_window)
 
   def getMetric(self):
     return self._subErrorMetrics[0].getMetric()
@@ -778,7 +746,8 @@ def evalCustomErrorMetric(expr, prediction, groundTruth, tools):
   error = sandbox(expr)
   return error
 
-################################################################################
+
+
 class CustomErrorMetric(MetricsIface):
   """
     Custom Error Metric class that handles user defined error metrics
@@ -944,7 +913,7 @@ class CustomErrorMetric(MetricsIface):
     return self.averageError
 
 
-################################################################################
+
 class MetricMovingMode(AggregateMetric):
   """
       computes error metric based on moving mode prediction
@@ -991,7 +960,7 @@ class MetricMovingMode(AggregateMetric):
     return result
 
 
-################################################################################
+
 class MetricTrivial(AggregateMetric):
   """
   computes a metric against the ground truth N steps ago. The metric to
@@ -1033,7 +1002,7 @@ class MetricTrivial(AggregateMetric):
     return self._subErrorMetrics[0].addInstance(groundTruth, prediction, record)
 
 
-################################################################################
+
 class MetricTwoGram(AggregateMetric):
   """
   computes error metric based on one-grams. The groundTruth passed into
@@ -1130,7 +1099,8 @@ class MetricTwoGram(AggregateMetric):
 
     return self._subErrorMetrics[0].addInstance(actualGroundTruth, pred, record)
 
-################################################################################
+
+
 class MetricAccuracy(AggregateMetric):
   """
   computes simple accuracy for an enumerated type. all inputs are treated as
@@ -1161,8 +1131,6 @@ class MetricAccuracy(AggregateMetric):
 
 
 
-
-################################################################################
 class MetricAveError(AggregateMetric):
   """Simply the inverse of the Accuracy metric
         More consistent with scalar metrics because
@@ -1189,8 +1157,6 @@ class MetricAveError(AggregateMetric):
 
 
 
-
-################################################################################
 class MetricNegAUC(AggregateMetric):
   """ Computes -1 * AUC (Area Under the Curve) of the ROC (Receiver Operator
       Characteristics) curve. We compute -1 * AUC because metrics are optimized
@@ -1284,7 +1250,7 @@ class MetricNegAUC(AggregateMetric):
     return -1 * auc
 
 
-################################################################################
+
 class MetricMultiStep(AggregateMetric):
   """
   This is an "uber" metric which is used to apply one of the other basic
@@ -1363,7 +1329,7 @@ class MetricMultiStep(AggregateMetric):
     return self.aggregateError
 
 
-################################################################################
+
 class MetricMultiStepProbability(AggregateMetric):
   """
   This is an "uber" metric which is used to apply one of the other basic
@@ -1400,7 +1366,7 @@ class MetricMultiStepProbability(AggregateMetric):
       subErrorMetric.window = 1
       subErrorMetric.spec.params['window'] = 1
 
-    self._movingAverage = _MovingAverage(self.window)
+    self._movingAverage = MovingAverage(self.window)
 
   def getMetric(self):
     return {'value': self.aggregateError, "stats" :
@@ -1461,5 +1427,60 @@ class MetricMultiStepProbability(AggregateMetric):
 
 
 
+class MetricMulti(MetricsIface):
+  """Multi metric can combine multiple other (sub)metrics and 
+     weight them to provide combined score."""
 
+  def __init__(self, metricSpec):
+    """MetricMulti constructor using metricSpec is not allowed."""
+    raise ValueError("MetricMulti cannot be constructed from metricSpec string! "
+                     "Use MetricMulti(weights,metrics) constructor instead.")
+
+  def __init__(self, weights, metrics, window=None):
+    """MetricMulti 
+       @param weights - [list of floats] used as weights
+       @param metrics - [list of submetrics] 
+       @param window - (opt) window size for moving average, or None when disabled
+    """
+    if (weights is None or not isinstance(weights, list) or 
+                          not len(weights) > 0 or
+                          not isinstance(weights[0], float)):
+      raise ValueError("MetricMulti requires 'weights' parameter as a [list of floats]")
+    self.weights = weights
+
+    if (metrics is None or not isinstance(metrics, list) or
+                          not len(metrics) > 0 or
+                          not isinstance(metrics[0], MetricsIface)):
+      raise ValueError("MetricMulti requires 'metrics' parameter as a [list of Metrics]")
+    self.metrics = metrics
+    if window is not None:
+      self.movingAvg = MovingAverage(windowSize=window)
+    else:
+      self.movingAvg = None
+
+
+  def addInstance(self, groundTruth, prediction, record = None):
+    err = 0.0
+    subResults = [m.addInstance(groundTruth, prediction, record) for m in self.metrics]
+    for i in xrange(len(self.weights)):
+      if subResults[i] is not None:
+        err += subResults[i]*self.weights[i]
+      else: # submetric returned None, propagate
+        self.err = None
+        return None
+
+    if self.verbosity > 2:
+      print "IN=",groundTruth," pred=",prediction,": w=",self.weights[i]," metric=",self.metrics[i]," value=",m," err=",err
+    if self.movingAvg is not None:
+      err=self.movingAvg(err)
+    self.err = err
+    return err
+
+
+  def __repr__(self):
+    return "MetricMulti(weights=%s, metrics=%s)" % (self.weights, self.metrics) 
+
+
+  def getMetric(self):
+    return {'value': self.err, "stats" : {"weights" : self.weights}}
 

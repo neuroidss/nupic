@@ -79,6 +79,7 @@ from StringIO import StringIO
 import time
 import traceback
 
+from pkg_resources import resource_string, resource_filename
 
 from configuration import Configuration
 from nupic.support.fshelpers import makeDirectoryFromAbsolutePath
@@ -87,7 +88,7 @@ from nupic.support.fshelpers import makeDirectoryFromAbsolutePath
 # Local imports
 
 
-#############################################################################
+
 def getCallerInfo(depth=2):
   """Utility function to get information about function callers
 
@@ -109,7 +110,8 @@ def getCallerInfo(depth=2):
     arg_class = args[3][arg_name].__class__.__name__
   return (method_name, filename, arg_class)
 
-#############################################################################
+
+
 def title(s=None, additional='', stream=sys.stdout, frame='-'):
   """Utility function to display nice titles
 
@@ -166,7 +168,8 @@ def title(s=None, additional='', stream=sys.stdout, frame='-'):
   print >> stream, s + additional
   print >> stream, '-' * length
 
-#############################################################################
+
+
 def bringToFront(title):
   """Bring a top-level window with a given title
      to the front on Windows"""
@@ -182,7 +185,7 @@ def bringToFront(title):
   set_foreground_window(hwnd)
 
 
-#############################################################################
+
 def getUserDocumentsPath():
   """
   Find the user's "Documents" directory (OS X), "My Documents" directory
@@ -232,7 +235,7 @@ def getUserDocumentsPath():
   return path
 
 
-#############################################################################
+
 def getArgumentDescriptions(f):
   """
   Get the arguments, default values, and argument descriptions for a function.
@@ -326,7 +329,7 @@ def getArgumentDescriptions(f):
   return args
 
 
-#############################################################################
+
 # TODO queryNumInwardIters appears to be unused and should probably be deleted
 #  from here altogether; it's likely an artifact of the legacy vision support.
 #def queryNumInwardIters(configPath, radialLength, numRepetitions=1):
@@ -343,7 +346,7 @@ def getArgumentDescriptions(f):
 #  return numTrainingItersTP * numRepetitions
 
 
-#############################################################################
+
 gLoggingInitialized = False
 def initLogging(verbose=False, console='stdout', consoleLevel='DEBUG'):
   """
@@ -355,13 +358,11 @@ def initLogging(verbose=False, console='stdout', consoleLevel='DEBUG'):
   configuration file is expected to be in the NTA_CONF_PATH directory. If
   NTA_CONF_PATH is not defined, then it is found in the 'conf/default'
   subdirectory of the NuPic installation directory (typically
-  ~/nta/current/conf/default)
+  ~/nupic/current/conf/default)
 
   The logging configuration file can use the environment variable 'NTA_LOG_DIR'
-  to set the locations of log files. If this variable is not defined already in
-  the environment, this method will set it to the 'logs' subdirectory of the
-  NuPic install directory (typically ~/nta/eng/logs) before loading in the
-  configuration file.
+  to set the locations of log files. If this variable is not defined, logging to
+  files will be disabled.
   
   console:    Defines console output for the default "root" logging
               configuration; this may be one of 'stdout', 'stderr', or None;
@@ -401,111 +402,91 @@ def initLogging(verbose=False, console='stdout', consoleLevel='DEBUG'):
   # Setup logging. Look for the nupic-logging.conf file, first in the
   #   NTA_CONFIG_DIR path (if defined), then in a subdirectory of the nupic
   #   module
-  # TODO: move into nupic.support
   configFilename = 'nupic-logging.conf'
-  try:
-    configFilePath = Configuration.findConfigFile(configFilename)
-  except:
-    configFilePath = None
-
-
-  # If NTA_LOG_DIR is not defined, set it now. This is used by the logging
-  #   config file to set the path for the log files
-  if 'NTA_LOG_DIR' not in os.environ:
-    os.environ['NTA_LOG_DIR'] = os.path.join(os.environ['NUPIC'], 'logs')
-  if not os.path.exists(os.environ['NTA_LOG_DIR']):
-    makeDirectoryFromAbsolutePath(os.path.abspath(os.environ['NTA_LOG_DIR']))
+  configFilePath = resource_filename("nupic.support", configFilename)
+  
+  configLogDir = os.environ.get('NTA_LOG_DIR', None)
 
   # Load in the logging configuration file
-  if configFilePath is None:
+  if verbose:
     print >> sys.stderr, (
-      "WARNING: Could not find the logging configuration file " \
-      "(filename: '%s', expected to be in search path: %s). Logging is " \
-      " disabled.") % (configFilename, Configuration.getConfigPaths())
-  else:
-    if verbose:
-      print >> sys.stderr, (
-        "Using logging configuration file: %s") % (configFilePath)
-      
-    # This dict will hold our replacement strings for logging configuration
-    replacements = dict()
-    
-    def makeKey(name):
-      """ Makes replacement key """
-      return "$$%s$$" % (name)
-    
-    platform = sys.platform.lower()
-    if platform.startswith('java'):
-      # Jython
-      import java.lang
-      platform = java.lang.System.getProperty("os.name").lower()
-      if platform.startswith('mac os x'):
-        platform = 'darwin'
+      "Using logging configuration file: %s") % (configFilePath)
 
-    if platform.startswith('darwin'):
-      replacements[makeKey('SYSLOG_HANDLER_ADDRESS')] = '"/var/run/syslog"'
-    elif platform.startswith('linux'):
-      replacements[makeKey('SYSLOG_HANDLER_ADDRESS')] = '"/dev/log"'
-    else:
-      raise RuntimeError("This platform is neither darwin nor linux: %s" % (
-        sys.platform,))
-    
-    if False: #os.path.isdir('/var/log/numenta/nupic'):
-      # NOTE: Not using syslogHandler for now because it either truncates or
-      #  drops messages over ~1,400 bytes (depending on platform)
-      #  Nupic logs go to syslog. Also, SysLogHandler raises an exception
-      #  on jython (at least on 2.5.2): "AttributeError: 'module' object has no
-      #  attribute 'AF_UNIX'" (jython is used by a sub-moduleof
-      #  ClientJobManager)
-      replacements[makeKey('PERSISTENT_LOG_HANDLER')] = 'syslogHandler'
-    else:
-      # Nupic logs go to file
-      replacements[makeKey('PERSISTENT_LOG_HANDLER')] = 'fileHandler'
-    
-      # Set up log file path for the default file handler
-      logFilePath = _genLoggingFilePath()
-      makeDirectoryFromAbsolutePath(os.path.dirname(logFilePath))
-      replacements[makeKey('FILE_HANDLER_LOG_FILENAME')] = repr(logFilePath)
-    
-    # Set up root logger
-    replacements[makeKey('ROOT_LOGGER_HANDLERS')] = (
-      replacements[makeKey('PERSISTENT_LOG_HANDLER')])
-    if console is not None:
-      replacements[makeKey('ROOT_LOGGER_HANDLERS')] += (
-        ',' + consoleStreamMappings[console])
-    
-    # Set up log level for console handlers
-    replacements[makeKey('CONSOLE_LOG_LEVEL')] = consoleLevel
-    
-    customConfig = StringIO()
-    with open(configFilePath) as src:
-      for lineNum, line in enumerate(src):
-        if "$$" in line:
-          for (key, value) in replacements.items():
-            line = line.replace(key, value)
-            
-        # If there is still a replacement string in the line, we're missing it
-        #  from our replacements dict
-        if "$$" in line and "$$<key>$$" not in line:
-          raise RuntimeError(("The text %r, found at line #%d of file %r, "
-                              "contains a string not found in our replacement "
-                              "dict.") % (line, lineNum, configFilePath))
-        
-        customConfig.write(line)
-    
-    customConfig.seek(0)
-    if python_version()[:3] >= '2.6':
-      # NOTE: the disable_existing_loggers arg is new as of Python 2.6, so it's
-      #  not supported on our jython interperter, which was v2.5.x as of this
-      #  writing
-      logging.config.fileConfig(customConfig, disable_existing_loggers=False)
-    else:
-      logging.config.fileConfig(customConfig)
+  # This dict will hold our replacement strings for logging configuration
+  replacements = dict()
+
+  def makeKey(name):
+    """ Makes replacement key """
+    return "$$%s$$" % (name)
+
+  platform = sys.platform.lower()
+  if platform.startswith('java'):
+    # Jython
+    import java.lang
+    platform = java.lang.System.getProperty("os.name").lower()
+    if platform.startswith('mac os x'):
+      platform = 'darwin'
+
+  if platform.startswith('darwin'):
+    replacements[makeKey('SYSLOG_HANDLER_ADDRESS')] = '"/var/run/syslog"'
+  elif platform.startswith('linux'):
+    replacements[makeKey('SYSLOG_HANDLER_ADDRESS')] = '"/dev/log"'
+  else:
+    raise RuntimeError("This platform is neither darwin nor linux: %s" % (
+      sys.platform,))
+
+  # Nupic logs go to file
+  replacements[makeKey('PERSISTENT_LOG_HANDLER')] = 'fileHandler'
+  replacements[makeKey('FILE_HANDLER_LOG_FILENAME')] = '"/dev/null"'
+
+  # Set up log file path for the default file handler and configure handlers
+  handlers = list()
+  
+  if configLogDir is not None:
+    logFilePath = _genLoggingFilePath()
+    makeDirectoryFromAbsolutePath(os.path.dirname(logFilePath))
+    replacements[makeKey('FILE_HANDLER_LOG_FILENAME')] = repr(logFilePath)
+
+    handlers.append(replacements[makeKey('PERSISTENT_LOG_HANDLER')])
+
+  if console is not None:
+    handlers.append(consoleStreamMappings[console])
+
+  replacements[makeKey('ROOT_LOGGER_HANDLERS')] = ", ".join(handlers)
+
+  # Set up log level for console handlers
+  replacements[makeKey('CONSOLE_LOG_LEVEL')] = consoleLevel
+
+  customConfig = StringIO()
+
+  # Using pkg_resources to get the logging file, which should be packaged and
+  # associated with this source file name.
+  loggingFileContents = resource_string(__name__, configFilename)
+
+  for lineNum, line in enumerate(loggingFileContents.splitlines()):
+    if "$$" in line:
+      for (key, value) in replacements.items():
+        line = line.replace(key, value)
+
+    # If there is still a replacement string in the line, we're missing it
+    #  from our replacements dict
+    if "$$" in line and "$$<key>$$" not in line:
+      raise RuntimeError(("The text %r, found at line #%d of file %r, "
+                          "contains a string not found in our replacement "
+                          "dict.") % (line, lineNum, configFilePath))
+
+    customConfig.write("%s\n" % line)
+
+  customConfig.seek(0)
+  if python_version()[:3] >= '2.6':
+    logging.config.fileConfig(customConfig, disable_existing_loggers=False)
+  else:
+    logging.config.fileConfig(customConfig)
 
   gLoggingInitialized = True
 
 
-#############################################################################
+
 def reinitLoggingDir():
   """ (Re-)Initialize the loging directory for the calling application that
   uses initLogging() for logging configuration
@@ -515,11 +496,11 @@ def reinitLoggingDir():
    the benefit of nupic-services.py to allow it to restore its logging directory
    after the hard-reset operation.
   """
-  if gLoggingInitialized:
+  if gLoggingInitialized and 'NTA_LOG_DIR' in os.environ:
     makeDirectoryFromAbsolutePath(os.path.dirname(_genLoggingFilePath()))
 
 
-#############################################################################
+
 def _genLoggingFilePath():
   """ Generate a filepath for the calling app """
   appName = os.path.splitext(os.path.basename(sys.argv[0]))[0] or 'UnknownApp'
@@ -533,7 +514,6 @@ def _genLoggingFilePath():
   
   
 
-#############################################################################
 def enableLoggingErrorDebugging():
   """ Overrides the python logging facility's Handler.handleError function to
   raise an exception instead of print and suppressing it.  This allows a deeper
@@ -589,7 +569,6 @@ def enableLoggingErrorDebugging():
   
   
 
-#############################################################################
 def clippedObj(obj, maxElementSize=64):
   """
   Return a clipped version of obj suitable for printing, This
@@ -629,7 +608,6 @@ def clippedObj(obj, maxElementSize=64):
 
 
 
-###############################################################################
 def intTo8ByteArray(inValue):
   """
   Converts an int to a packed byte array, with left most significant byte
@@ -652,7 +630,7 @@ def intTo8ByteArray(inValue):
   return packed_data
 
 
-###############################################################################
+
 def byteArrayToInt(packed_data):
   """
   Converts a byte array into an integer
@@ -668,7 +646,7 @@ def byteArrayToInt(packed_data):
          value[7]
 
 
-###############################################################################
+
 def getSpecialRowID():
   """
   Special row id is 0xFF FFFF FFFF FFFF FFFF (9 bytes of 0xFF)
@@ -680,7 +658,7 @@ def getSpecialRowID():
   return packed_data
 
 
-################################################################################
+
 _FLOAT_SECONDS_IN_A_DAY = 24.0 * 60.0 * 60.0
 def floatSecondsFromTimedelta(td):
   """ Convert datetime.timedelta to seconds in floating point """
@@ -690,7 +668,7 @@ def floatSecondsFromTimedelta(td):
   return sec
 
 
-#############################################################################
+
 def aggregationToMonthsSeconds(interval):
   """
   Return the number of months and seconds from an aggregation dict that 
@@ -728,7 +706,7 @@ def aggregationToMonthsSeconds(interval):
   return {'months': months, 'seconds': seconds}
 
 
-#############################################################################
+
 def aggregationDivide(dividend, divisor):
   """
   Return the result from dividing two dicts that represent date and time.

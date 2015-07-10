@@ -38,7 +38,7 @@ DATETIME_FORMATS = ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S:%f',
                     '%Y-%m-%dT%H:%M:%S')
 
 
-#############################################################################
+
 def parseTimestamp(s):
   """Parses a textual datetime format and return a Python datetime object.
 
@@ -60,17 +60,17 @@ def parseTimestamp(s):
                    'formats are: [%s]' % (s, ', '.join(DATETIME_FORMATS)))
 
 
-#############################################################################
+
 def serializeTimestamp(t):
   return t.strftime(DATETIME_FORMATS[0])
 
 
-#############################################################################
+
 def serializeTimestampNoMS(t):
   return t.strftime(DATETIME_FORMATS[2])
 
 
-#############################################################################
+
 def parseBool(s):
   l = s.lower()
   if l in ("true", "t", "1"):
@@ -80,21 +80,21 @@ def parseBool(s):
   raise Exception("Unable to convert string '%s' to a boolean value" % s)
 
 
-#############################################################################
+
 def floatOrNone(f):
   if f == 'None':
     return None
   return float(f)
 
 
-#############################################################################
+
 def intOrNone(i):
   if i.strip() == 'None' or i.strip() == 'NULL':
     return None
   return int(i)
 
 
-#############################################################################
+
 def escape(s):
   """Escape commas, tabs, newlines and dashes in a string
 
@@ -112,7 +112,7 @@ def escape(s):
   return s
 
 
-#############################################################################
+
 def unescape(s):
   """Unescapes a string that may contain commas, tabs, newlines and dashes
 
@@ -127,3 +127,23 @@ def unescape(s):
 
   return s
 
+
+
+def parseSdr(s):
+  """Parses a string containing only 0's and 1's and return a Python list object.
+  """
+  assert isinstance(s, basestring)
+  sdr = [int(c) for c in s if c in ("0", "1")]
+  if len(sdr) != len(s):
+    raise ValueError("The provided string %s is malformed. The string should "
+                     "have only 0's and 1's.")
+
+  return sdr
+
+
+
+def serializeSdr(sdr):
+  """Serialize Python list object containing only 0's and 1's to string.
+  """
+
+  return "".join(str(bit) for bit in sdr)

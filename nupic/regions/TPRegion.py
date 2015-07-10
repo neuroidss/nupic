@@ -20,8 +20,9 @@
 # ----------------------------------------------------------------------
 
 import os
+import numpy
 
-from nupic.research import TP, TPTrivial
+from nupic.research import TP
 from nupic.research import TP10X2
 from nupic.research import TP_shim
 from nupic.support import getArgumentDescriptions
@@ -29,7 +30,8 @@ from PyRegion import PyRegion
 
 gDefaultTemporalImp = 'py'
 
-##############################################################################
+
+
 def _getTPClass(temporalImp):
   """ Return the class corresponding to the given temporalImp string
   """
@@ -38,16 +40,14 @@ def _getTPClass(temporalImp):
     return TP.TP
   elif temporalImp == 'cpp':
     return TP10X2.TP10X2
-  elif temporalImp == 'trivial':
-    return TPTrivial.TPTrivial
   elif temporalImp == 'tm_py':
     return TP_shim.TPShim
   else:
     raise RuntimeError("Invalid temporalImp '%s'. Legal values are: 'py', "
-              "'cpp', 'trivial', and 'tm_py'" % (temporalImp))
+              "'cpp', and 'tm_py'" % (temporalImp))
 
 
-##############################################################################
+
 def _buildArgs(f, self=None, kwargs={}):
   """
   Get the default arguments from the function and assign as instance vars.
@@ -107,7 +107,7 @@ def _getAdditionalSpecs(temporalImp, kwargs={}):
   to 'Byte' for None and complex types
 
   Determines the spatial parameters based on the selected implementation.
-  It defaults to FDRCSpatial.
+  It defaults to TemporalPooler.
   Determines the temporal parameters based on the temporalImp
   """
   typeNames = {int: 'UInt32', float: 'Real32', str: 'Byte', bool: 'bool', tuple: 'tuple'}
@@ -132,8 +132,8 @@ def _getAdditionalSpecs(temporalImp, kwargs={}):
       return ''
 
   # Build up parameters from temporal pooler's constructor
-  FDRTemporalClass = _getTPClass(temporalImp)
-  tArgTuples = _buildArgs(FDRTemporalClass.__init__)
+  TemporalClass = _getTPClass(temporalImp)
+  tArgTuples = _buildArgs(TemporalClass.__init__)
   temporalSpec = {}
   for argTuple in tArgTuples:
     d = dict(
@@ -187,12 +187,11 @@ def _getAdditionalSpecs(temporalImp, kwargs={}):
 
     temporalImp=dict(
       description="""Which temporal pooler implementation to use. Set to either
-       'py', 'cpp' or 'trivial'. The 'cpp' implementation is optimized for speed in C++.
-       The 'trivial' implementation makes random or zeroth order predictions.""",
+       'py' or 'cpp'. The 'cpp' implementation is optimized for speed in C++.""",
       accessMode='ReadWrite',
       dataType='Byte',
       count=0,
-      constraints='enum: py, cpp, trivial'),
+      constraints='enum: py, cpp'),
 
   ))
 
@@ -210,6 +209,14 @@ def _getAdditionalSpecs(temporalImp, kwargs={}):
       accessMode='ReadWrite',
       dataType='UInt32',
       count=1,
+      constraints='bool'),
+
+    computePredictedActiveCellIndices=dict(
+      description='1 if active and predicted active indices should be computed',
+      accessMode='Create',
+      dataType='UInt32',
+      count=1,
+      defaultValue=0,
       constraints='bool'),
 
     anomalyMode=dict(
@@ -299,22 +306,24 @@ class TPRegion(PyRegion):
                cellsSavePath='',
                temporalImp=gDefaultTemporalImp,
                anomalyMode=False,
+               computePredictedActiveCellIndices=False,
 
                **kwargs):
 
     # Which Temporal implementation?
-    FDRTemporalClass = _getTPClass(temporalImp)
+    TemporalClass = _getTPClass(temporalImp)
 
     # Make a list of automatic temporal arg names for later use
     # Pull out the temporal arguments automatically
     # These calls whittle down kwargs and create instance variables of TPRegion
-    tArgTuples = _buildArgs(FDRTemporalClass.__init__, self, kwargs)
+    tArgTuples = _buildArgs(TemporalClass.__init__, self, kwargs)
 
     self._temporalArgNames = [t[0] for t in tArgTuples]
 
     self.learningMode   = True      # Start out with learning enabled
     self.inferenceMode  = False
     self.anomalyMode    = anomalyMode
+    self.computePredictedActiveCellIndices = computePredictedActiveCellIndices
     self.topDownMode    = False
     self.columnCount    = columnCount
     self.inputWidth     = inputWidth
@@ -351,6 +360,8 @@ class TPRegion(PyRegion):
   # Initialization code
   #
   #############################################################################
+
+
   def _initialize(self):
     """
     Initialize all ephemeral data members, and give the derived
@@ -387,7 +398,7 @@ class TPRegion(PyRegion):
     self._initEphemerals()
     self._checkEphemeralMembers()
 
-  #############################################################################
+
   def initialize(self, dims, splitterMaps):
 
     # Allocate appropriate temporal pooler object
@@ -402,11 +413,6 @@ class TPRegion(PyRegion):
         self._tfdr = tpClass(
              numberOfCols=self.columnCount,
              cellsPerColumn=self.cellsPerColumn,
-             **autoArgs)
-
-      elif self.temporalImp == 'trivial':
-        self._tfdr = TPTrivial.TPTrivial(
-             numberOfCols=self.columnCount
              **autoArgs)
       else:
         raise RuntimeError("Invalid temporalImp")
@@ -514,6 +520,18 @@ class TPRegion(PyRegion):
       size = activeLearnCells.shape[0] * activeLearnCells.shape[1]
       outputs['lrnActiveStateT'][:] = activeLearnCells.reshape(size)
 
+    if self.computePredictedActiveCellIndices:
+      # Reshape so we are dealing with 1D arrays
+      activeState = self._tfdr.getActiveState().reshape(-1).astype('float32')
+      predictedState = self._tfdr.getPredictedState().reshape(-1).astype('float32')
+      activeIndices = numpy.where(activeState != 0)[0]
+      predictedIndices= numpy.where(predictedState != 0)[0]
+      predictedActiveIndices = numpy.intersect1d(activeIndices, predictedIndices)
+      outputs["activeCells"].fill(0)
+      outputs["activeCells"][activeIndices] = 1
+      outputs["predictedActiveCells"].fill(0)
+      outputs["predictedActiveCells"][predictedActiveIndices] = 1
+
 
   #############################################################################
   #
@@ -568,6 +586,20 @@ class TPRegion(PyRegion):
         topDownOut=dict(
           description="""The top-down inputsignal, generated from
                         feedback from upper levels""",
+          dataType='Real32',
+          count=0,
+          regionLevel=True,
+          isDefaultOutput=False),
+
+        activeCells=dict(
+          description="The cells that are active",
+          dataType='Real32',
+          count=0,
+          regionLevel=True,
+          isDefaultOutput=False),
+
+        predictedActiveCells=dict(
+          description="The cells that are active and predicted",
           dataType='Real32',
           count=0,
           regionLevel=True,
@@ -629,7 +661,6 @@ class TPRegion(PyRegion):
     return spec
 
 
-  #############################################################################
   def getParameter(self, parameterName, index=-1):
     """
       Get the value of a parameter. Most parameters are handled automatically by
@@ -643,7 +674,6 @@ class TPRegion(PyRegion):
       return PyRegion.getParameter(self, parameterName, index)
 
 
-  #############################################################################
   def setParameter(self, parameterName, index, parameterValue):
     """
       Set the value of a Spec parameter. Most parameters are handled
@@ -707,7 +737,6 @@ class TPRegion(PyRegion):
   #############################################################################
 
 
-  #############################################################################
   def __getstate__(self):
     """
     Return serializable state.  This function will return a version of the
@@ -740,7 +769,6 @@ class TPRegion(PyRegion):
       self._tfdr.loadFromFile(filePath)
 
 
-  #############################################################################
   def __setstate__(self, state):
     """
     Set the state of ourself from a serialized state.
@@ -749,13 +777,16 @@ class TPRegion(PyRegion):
     if not hasattr(self, 'storeDenseOutput'):
       self.storeDenseOutput = False
 
+    if not hasattr(self, 'computePredictedActiveCellIndices'):
+      self.computePredictedActiveCellIndices = False
+
     self.__dict__.update(state)
     self._loaded = True
     # Initialize all non-persistent base members, as well as give
     # derived class an opportunity to do the same.
     self._initialize()
 
-  #############################################################################
+
   def _initEphemerals(self):
     """
     Initialize all ephemerals used by derived classes.
@@ -765,7 +796,7 @@ class TPRegion(PyRegion):
     self._fpLogTPOutput = None
     self.logPathOutput = None
 
-  #############################################################################
+
   def _getEphemeralMembers(self):
     """
     Callback that returns a list of all "ephemeral" members (i.e., data members
@@ -774,7 +805,6 @@ class TPRegion(PyRegion):
 
     return ['_sequencePos', '_fpLogTPOutput', 'logPathOutput',]
 
-  #############################################################################
 
   def _getEphemeralMembersBase(self):
     """
@@ -786,6 +816,7 @@ class TPRegion(PyRegion):
         '_iterations',
       ]
 
+
   def _getEphemeralMembersAll(self):
     """
     Returns a concatenated list of both the standard base class
@@ -794,7 +825,6 @@ class TPRegion(PyRegion):
     """
     return self._getEphemeralMembersBase() + self._getEphemeralMembers()
 
-  #############################################################################
 
   def _checkEphemeralMembers(self):
     for attrName in self._getEphemeralMembersBase():
@@ -815,7 +845,7 @@ class TPRegion(PyRegion):
   #
   #############################################################################
 
-  #########################################################################################
+
   def _conditionalBreak(self):
     if self.breakKomodo:
       import dbgp.client; dbgp.client.brk()
@@ -827,6 +857,8 @@ class TPRegion(PyRegion):
   # NuPIC 2 Support
   #
   #############################################################################
+
+
   def getOutputElementCount(self, name):
     if name == 'bottomUpOut':
       return self.outputWidth
@@ -834,8 +866,13 @@ class TPRegion(PyRegion):
       return self.columnCount
     elif name == 'lrnActiveStateT':
       return self.outputWidth
+    elif name == "activeCells":
+      return self.outputWidth
+    elif name == "predictedActiveCells":
+      return self.outputWidth
     else:
       raise Exception("Invalid output name specified")
+
 
   # TODO: as a temporary hack, getParameterArrayCount checks to see if there's a variable, private or
   # not, with that name. If so, it attempts to return the length of that variable.
@@ -844,6 +881,7 @@ class TPRegion(PyRegion):
     if (not hasattr(p, '__len__')):
       raise Exception("Attempt to access parameter '%s' as an array but it is not an array" % name)
     return len(p)
+
 
   # TODO: as a temporary hack, getParameterArray checks to see if there's a variable, private or not,
   # with that name. If so, it returns the value of the variable.

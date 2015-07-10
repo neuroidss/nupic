@@ -32,21 +32,19 @@ import json
 import itertools
 import logging
 import traceback
-from collections import defaultdict, deque
-from datetime import timedelta
+from collections import deque
 from operator import itemgetter
 
 import numpy
 
-from model import Model
+from nupic.frameworks.opf.model import Model
 from nupic.algorithms.anomaly import Anomaly
 from nupic.data import SENTINEL_VALUE_FOR_MISSING_DATA
 from nupic.data.fieldmeta import FieldMetaSpecial, FieldMetaInfo
-from nupic.data.filters import AutoResetFilter
-from nupic.encoders import MultiEncoder
+from nupic.encoders import MultiEncoder, DeltaEncoder
 from nupic.engine import Network
 from nupic.support.fshelpers import makeDirectoryFromAbsolutePath
-from opfutils import (InferenceType,
+from nupic.frameworks.opf.opfutils import (InferenceType,
                       InferenceElement,
                       SensorInput,
                       initLogger)
@@ -65,7 +63,7 @@ def requireAnomalyModel(func):
   Decorator for functions that require anomaly models.
   """
   def _decorator(self, *args, **kwargs):
-    if not (self.getInferenceType() == InferenceType.TemporalAnomaly):
+    if not self.getInferenceType() == InferenceType.TemporalAnomaly:
       raise RuntimeError("Method required a TemporalAnomaly model.")
     if self._getAnomalyClassifier() is None:
       raise RuntimeError("Model does not support this command. Model must"
@@ -74,7 +72,7 @@ def requireAnomalyModel(func):
   return _decorator
 
 
-###############################################################
+
 class NetworkInfo(object):
   """ Data type used as return value type by
   CLAModel.__createCLANetwork()
@@ -94,7 +92,8 @@ class NetworkInfo(object):
     return "NetworkInfo(net=%r, statsCollectors=%r)" % (
               self.net, self.statsCollectors)
 
-###############################################################
+
+
 class CLAModel(Model):
 
   __supportedInferenceKindSet = set((InferenceType.TemporalNextStep,
@@ -107,7 +106,7 @@ class CLAModel(Model):
 
   __myClassName = "CLAModel"
 
-  #############################################################################
+
   def __init__(self,
       sensorParams,
       inferenceType=InferenceType.TemporalNextStep,
@@ -189,7 +188,11 @@ class CLAModel(Model):
     self._predictedFieldName = None
     self._numFields = None
     # init anomaly
-    self._anomalyInst = Anomaly()
+    windowSize = anomalyParams.get("slidingWindowSize", None)
+    mode = anomalyParams.get("mode", "pure")
+    anomalyThreshold = anomalyParams.get("autoDetectThreshold", None)
+    self._anomalyInst = Anomaly(slidingWindowSize=windowSize, mode=mode,
+                                binaryAnomalyThreshold=anomalyThreshold)
 
     # -----------------------------------------------------------------------
     # Create the network
@@ -200,11 +203,11 @@ class CLAModel(Model):
 
     # Initialize Spatial Anomaly detection parameters
     if self.getInferenceType() == InferenceType.NontemporalAnomaly:
-      self._getSPRegion().setParameter('anomalyMode', True)
+      self._getSPRegion().setParameter("anomalyMode", True)
 
     # Initialize Temporal Anomaly detection parameters
     if self.getInferenceType() == InferenceType.TemporalAnomaly:
-      self._getTPRegion().setParameter('anomalyMode', True)
+      self._getTPRegion().setParameter("anomalyMode", True)
       self._prevPredictedColumns = numpy.array([])
 
     # -----------------------------------------------------------------------
@@ -219,6 +222,8 @@ class CLAModel(Model):
 
     self.__logger.debug("Instantiated %s" % self.__class__.__name__)
 
+    self._input = None
+
     return
 
 
@@ -230,7 +235,6 @@ class CLAModel(Model):
         (paramName))
 
 
-  #############################################################################
   def resetSequenceStates(self):
     """ [virtual method override] Resets the model's sequence states. Normally
     called to force the delineation of a sequence, such as between OPF tasks.
@@ -246,7 +250,6 @@ class CLAModel(Model):
       return
 
 
-  #############################################################################
   def finishLearning(self):
     """ [virtual method override] Places the model in a permanent "finished
     learning" mode where it will not be able to learn from subsequent input
@@ -297,10 +300,7 @@ class CLAModel(Model):
 
 
   def setEncoderLearning(self,learningEnabled):
-    Encoder  = self._getEncoder()
-    Encoder.setLearning(learningEnabled)
-
-    return
+    self._getEncoder().setLearning(learningEnabled)
 
 
   # Anomaly Accessor Methods
@@ -352,8 +352,8 @@ class CLAModel(Model):
 
             return:
                 An ModelResult namedtuple (see opfutils.py) The contents of
-                ModelResult.inferences depends on the the specific inference type
-                of this model, which can be queried by getInferenceType()
+                ModelResult.inferences depends on the the specific inference
+                type of this model, which can be queried by getInferenceType()
     """
     assert not self.__restoringFromState
     assert inputRecord
@@ -362,9 +362,11 @@ class CLAModel(Model):
 
     self.__numRunCalls += 1
 
-    self.__logger.debug("CLAModel.run() inputRecord=%s", (inputRecord))
+    if self.__logger.isEnabledFor(logging.DEBUG):
+      self.__logger.debug("CLAModel.run() inputRecord=%s", (inputRecord))
 
     results.inferences = {}
+    self._input = inputRecord
 
     # -------------------------------------------------------------------------
     # Turn learning on or off?
@@ -378,13 +380,6 @@ class CLAModel(Model):
     ###########################################################################
     # Predictions and Learning
     ###########################################################################
-    predictions = dict()
-    inputRecordSensorMappings = dict()
-    inferenceType = self.getInferenceType()
-    inferenceArgs = self.getInferenceArgs()
-    if inferenceArgs is None:
-      inferenceArgs = {}
-
     self._sensorCompute(inputRecord)
     self._spCompute()
     self._tpCompute()
@@ -400,7 +395,7 @@ class CLAModel(Model):
       inferences = self._multiStepCompute(rawInput=inputRecord)
     # For temporal classification. Not used, and might not work anymore
     elif self._isClassificationModel():
-      inferences = self._classifcationCompute()
+      inferences = self._classificationCompute()
 
     results.inferences.update(inferences)
 
@@ -510,7 +505,7 @@ class CLAModel(Model):
 
 
   def _isClassificationModel(self):
-    return self.getInferenceType() in (InferenceType.TemporalClassification)
+    return self.getInferenceType() in InferenceType.TemporalClassification
 
 
   def _multiStepCompute(self, rawInput):
@@ -538,7 +533,7 @@ class CLAModel(Model):
                                         rawInput=rawInput)
 
 
-  def _classifcationCompute(self):
+  def _classificationCompute(self):
     inference = {}
     classifier = self._getClassifierRegion()
     classifier.setParameter('inferenceMode', True)
@@ -564,7 +559,6 @@ class CLAModel(Model):
     if not self.isInferenceEnabled():
       return {}
 
-    tp = self._getTPRegion()
     sp = self._getSPRegion()
     sensor = self._getSensorRegion()
 
@@ -602,6 +596,7 @@ class CLAModel(Model):
     Compute Anomaly score, if required
     """
     inferenceType = self.getInferenceType()
+
     inferences = {}
     sp = self._getSPRegion()
     score = None
@@ -617,10 +612,17 @@ class CLAModel(Model):
         sensor = self._getSensorRegion()
         activeColumns = sensor.getOutputData('dataOut').nonzero()[0]
 
+      if not self._predictedFieldName in self._input:
+        raise ValueError(
+          "Expected predicted field '%s' in input row, but was not found!" 
+          % self._predictedFieldName
+        )
       # Calculate the anomaly score using the active columns
       # and previous predicted columns.
       score = self._anomalyInst.compute(
-          activeColumns, self._prevPredictedColumns)
+                                   activeColumns,
+                                   self._prevPredictedColumns,
+                                   inputValue=self._input[self._predictedFieldName])
 
       # Store the predicted columns for the next timestep.
       predictedColumns = tp.getOutputData("topDownOut").nonzero()[0]
@@ -662,6 +664,14 @@ class CLAModel(Model):
                   None.
     rawInput:   The raw input to the sensor, as a dict.
     """
+    inferenceArgs = self.getInferenceArgs()
+    predictedFieldName = inferenceArgs.get('predictedField', None)
+    if predictedFieldName is None:
+      raise ValueError(
+        "No predicted field was enabled! Did you call enableInference()?"
+      )
+    self._predictedFieldName = predictedFieldName
+
     classifier = self._getClassifierRegion()
     if not self._hasCL or classifier is None:
       # No classifier so return an empty dict for inferences.
@@ -670,10 +680,8 @@ class CLAModel(Model):
     sensor = self._getSensorRegion()
     minLikelihoodThreshold = self._minLikelihoodThreshold
     maxPredictionsPerStep = self._maxPredictionsPerStep
-    inferenceArgs = self.getInferenceArgs()
     needLearning = self.isLearningEnabled()
     inferences = {}
-    predictedFieldName = inferenceArgs.get('predictedField', None)
 
     # Get the classifier input encoder, if we don't have it already
     if self._classifierInputEncoder is None:
@@ -682,10 +690,10 @@ class CLAModel(Model):
               "the 'predictedField' in its config, which is required "
               "for multi-step prediction inference.")
 
-      # This is getting index of predicted field if being fed to CLA.
-      self._predictedFieldName = predictedFieldName
       encoderList = sensor.getSelf().encoder.getEncoderList()
       self._numFields = len(encoderList)
+
+      # This is getting index of predicted field if being fed to CLA.
       fieldNames = sensor.getSelf().encoder.getScalarNames()
       if predictedFieldName in fieldNames:
         self._predictedFieldIdx = fieldNames.index(predictedFieldName)
@@ -725,7 +733,7 @@ class CLAModel(Model):
 
     # Convert the absolute values to deltas if necessary
     # The bucket index should be handled correctly by the underlying delta encoder
-    if self._classifierInputEncoder.isDelta():
+    if isinstance(self._classifierInputEncoder, DeltaEncoder):
       # Make the delta before any values have been seen 0 so that we do not mess up the
       # range for the adaptive scalar encoder.
       if not hasattr(self,"_ms_prevVal"):
@@ -809,7 +817,7 @@ class CLAModel(Model):
       # ---------------------------------------------------------------------
       # If we have a delta encoder, we have to shift our predicted output value
       #  by the sum of the deltas
-      if self._classifierInputEncoder.isDelta():
+      if isinstance(self._classifierInputEncoder, DeltaEncoder):
         # Get the prediction history for this number of timesteps.
         # The prediction history is a store of the previous best predicted values.
         # This is used to get the final shift from the current absolute value.
@@ -867,7 +875,6 @@ class CLAModel(Model):
     return inferences
 
 
-  #############################################################################
   @classmethod
   def _removeUnlikelyPredictions(cls, likelihoodsDict, minLikelihoodThreshold,
                                  maxPredictionsPerStep):
@@ -1015,7 +1022,6 @@ class CLAModel(Model):
     return self._getSensorRegion().getSelf().dataSource
 
 
-  #############################################################################
   def __createCLANetwork(self, sensorParams, spEnable, spParams, tpEnable,
                          tpParams, clEnable, clParams, anomalyParams):
     """ Create a CLA network and return it.
@@ -1023,8 +1029,6 @@ class CLAModel(Model):
     description:  CLA Model description dictionary (TODO: define schema)
     Returns:      NetworkInfo instance;
     """
-
-    isTemporal = self._hasTP
 
     #--------------------------------------------------
     # Create the network
@@ -1124,7 +1128,6 @@ class CLAModel(Model):
     if self.getInferenceType() == InferenceType.TemporalAnomaly:
       anomalyClParams = dict(
           trainRecords=anomalyParams.get('autoDetectWaitRecords', None),
-          anomalyThreshold=anomalyParams.get('autoDetectThreshold', None),
           cacheSize=anomalyParams.get('anomalyCacheRecords', None)
       )
       self._addAnomalyClassifierRegion(n, anomalyClParams, spEnable, tpEnable)
@@ -1135,14 +1138,6 @@ class CLAModel(Model):
     n.initialize()
 
     return NetworkInfo(net=n, statsCollectors=[])
-
-
-
-  #############################################################################
-  #
-  # CLAModel Methods to support serialization
-  #
-  #############################################################################
 
 
   def __getstate__(self):
@@ -1319,16 +1314,8 @@ class CLAModel(Model):
 
         anomalyClParams = dict(
           trainRecords=self._classifier_helper._autoDetectWaitRecords,
-          anomalyThreshold=None,
           cacheSize=self._classifier_helper._history_length,
         )
-
-        if '_classificationThreshold' in self._classifier_helper.__dict__:
-          anomalyClParams['anomalyThreshold'] = (
-              self._classifier_helper._classificationThreshold)
-        else:
-          anomalyClParams['anomalyThreshold'] = (
-            self._classifier_helper.getAutoDetectThreshold())
 
         spEnable = (self._getSPRegion() is not None)
         tpEnable = True
@@ -1389,10 +1376,7 @@ class CLAModel(Model):
 
     # Set defaults if not set
     if allParams['trainRecords'] is None:
-        allParams['trainRecords'] = DEFAULT_ANOMALY_TRAINRECORDS
-
-    if allParams['anomalyThreshold'] is None:
-      allParams['anomalyThreshold'] = DEFAULT_ANOMALY_THRESHOLD
+      allParams['trainRecords'] = DEFAULT_ANOMALY_TRAINRECORDS
 
     if allParams['cacheSize'] is None:
       allParams['cacheSize'] = DEFAULT_ANOMALY_CACHESIZE
@@ -1467,13 +1451,12 @@ class CLAModel(Model):
 
     if not skipCheck:
       # This will throw an exception if the member is missing
-      value = getattr(self, realName)
+      getattr(self, realName)
 
     return realName
 
 
 
-###############################################################################
 class DataBuffer(object):
   """
       A simple FIFO stack. Add data when it's available, and

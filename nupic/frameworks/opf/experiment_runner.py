@@ -19,9 +19,10 @@
 # http://numenta.org/licenses/
 # ----------------------------------------------------------------------
 
-"""This script provides the runExperiment() API function that is used
+"""
+This script provides the runExperiment() API function that is used
 by the command-line client run_opf_experiment.py of Online Prediction
-Framework (OPF). It executes a single expiriment.
+Framework (OPF). It executes a single experiment.
 """
 
 from collections import namedtuple
@@ -41,6 +42,8 @@ from nupic.frameworks.opf.modelfactory import ModelFactory
 from nupic.frameworks.opf.opftaskdriver import OPFTaskDriver
 from nupic.frameworks.opf.opfutils import (InferenceElement, matchPatterns,
                                            validateOpfJsonValue)
+from nupic.support import initLogging
+
 
 
 g_defaultCheckpointExtension = ".nta"
@@ -48,7 +51,7 @@ g_defaultCheckpointExtension = ".nta"
 
 # Schema of the Private Command-line Options dictionary returned by
 # _parseCommandLineOptions(). This "Private" options dict is consumed internally
-# by runExperiment (i.e., not passed to external modules).
+# by runExperiment (i.e. not passed to external modules).
 g_parsedPrivateCommandLineOptionsSchema = {
   "description":"OPF RunExperiment control args",
   "type":"object",
@@ -354,7 +357,7 @@ def _runExperimentImpl(options, model=None):
     model: For testing: may pass in an existing OPF Model instance
         to use instead of creating a new one.
 
-  Returns: referece to OPFExperiment instance that was constructed (this
+  Returns: reference to OPFExperiment instance that was constructed (this
       is provided to aid with debugging) or None, if none was
       created.
   """
@@ -382,6 +385,10 @@ def _runExperimentImpl(options, model=None):
       expIface.getModelControl()['environment'] == OpfEnvironment.Nupic):
     expIface.convertNupicEnvToOPF()
     experimentTasks = expIface.getModelControl().get('tasks', [])
+
+  # Ensures all the source locations are either absolute paths or relative to
+  # the nupic.datafiles package_data location.
+  expIface.normalizeStreamSources()
 
   # Handle listTasks
   if options.privateOptions['listTasks']:
@@ -829,3 +836,28 @@ class PeriodicActivityMgr(object):
           act.iteratorHolder[0] = None
 
     return True
+
+
+
+def main():
+  """ Module-level entry point.  Run according to options in sys.argv
+
+  Usage: python -m python -m nupic.frameworks.opf.experiment_runner
+
+  """
+  initLogging(verbose=True)
+
+  # Initialize pseudo-random number generators (PRNGs)
+  #
+  # This will fix the seed that is used by numpy when generating 'random'
+  # numbers. This allows for repeatability across experiments.
+  initExperimentPrng()
+
+  # Run it!
+  runExperiment(sys.argv[1:])
+
+
+
+if __name__ == "__main__":
+  main()
+

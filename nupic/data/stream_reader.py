@@ -27,7 +27,6 @@ import tempfile
 from pkg_resources import resource_filename
 
 from nupic.data.aggregator import Aggregator
-from nupic.data.datasethelpers import findDataset
 from nupic.data.fieldmeta import FieldMetaInfo
 from nupic.data.file_record_stream import FileRecordStream
 from nupic.data import jsonhelpers
@@ -45,19 +44,15 @@ FILE_PREF = 'file://'
 # If timeout is not set in the configuration file, default is 6 hours
 READ_TIMEOUT = 6*60*60
 
-############################################################################
-# Defines the exception thrown when the input stream times out receiving
-# new records.
-############################################################################
+
+
 class StreamTimeoutException(Exception):
+  """ Defines the exception thrown when the input stream times out receiving
+  new records."""
   pass
 
 
-###############################################################################
-# Implements a stream reader. This is a high level class that owns an
-#  underlying implementation of a RecordStreamIFace that handles the raw
-#  reading and writing of records
-###############################################################################
+
 class StreamReader(RecordStreamIface):
   """
   Implements a stream reader. This is a high level class that owns one or more
@@ -108,7 +103,7 @@ class StreamReader(RecordStreamIface):
 
   """
 
-  ############################################################################
+
   def __init__(self, streamDef, bookmark=None, saveOutput=False,
                isBlocking=True, maxTimeout=0, eofOnTimeout=False):
     """ Base class constructor, performs common initialization
@@ -284,28 +279,28 @@ class StreamReader(RecordStreamIface):
       self._writer = None
 
 
-  ##############################################################################
   def _openStream(self, dataUrl, isBlocking, maxTimeout, bookmark,
                   firstRecordIdx):
     """Open the underlying file stream.
 
     This only supports 'file://' prefixed paths.
     """
-    self._recordStoreName = findDataset(dataUrl[len(FILE_PREF):])
+    filePath = dataUrl[len(FILE_PREF):]
+    if not os.path.isabs(filePath):
+      filePath = os.path.join(os.getcwd(), filePath)
+    self._recordStoreName = filePath 
     self._recordStore = FileRecordStream(streamID=self._recordStoreName,
                                          write=False,
                                          bookmark=bookmark,
                                          firstRecord=firstRecordIdx)
 
 
-  ##############################################################################
   def close(self):
     """ Close the stream
     """
     return self._recordStore.close()
 
 
-  ############################################################################
   def getNextRecord(self):
     """ Returns combined data from all sources (values only).
     Returns None on EOF; empty sequence on timeout.
@@ -388,13 +383,11 @@ class StreamReader(RecordStreamIface):
         raise RuntimeError('No end of datastream found.')
 
 
-  ############################################################################
   def getLastRecords(self, numRecords):
     """Saves the record in the underlying storage."""
     raise RuntimeError("Not implemented in StreamReader")
 
 
-  #############################################################################
   def getRecordsRange(self, bookmark=None, range=None):
     """ Returns a range of records, starting from the bookmark. If 'bookmark'
     is None, then records read from the first available. If 'range' is
@@ -404,19 +397,17 @@ class StreamReader(RecordStreamIface):
     raise RuntimeError("Not implemented in StreamReader")
 
 
-  #############################################################################
   def getNextRecordIdx(self):
     """Returns the index of the record that will be read next from getNextRecord()
     """
     return self._recordCount
 
-  #############################################################################
+
   def recordsExistAfter(self, bookmark):
     """Returns True iff there are records left after the  bookmark."""
     return self._recordStore.recordsExistAfter(bookmark)
 
 
-  ##############################################################################
   def getAggregationMonthsAndSeconds(self):
     """ Returns the aggregation period of the record stream as a dict
     containing 'months' and 'seconds'. The months is always an integer and
@@ -439,24 +430,21 @@ class StreamReader(RecordStreamIface):
     """
     return self._aggMonthsAndSeconds
 
-  ############################################################################
+
   def appendRecord(self, record, inputRef=None):
     """Saves the record in the underlying storage."""
     raise RuntimeError("Not implemented in StreamReader")
 
 
-  ############################################################################
   def appendRecords(self, records, inputRef=None, progressCB=None):
     """Saves multiple records in the underlying storage."""
     raise RuntimeError("Not implemented in StreamReader")
 
 
-  #############################################################################
   def removeOldData(self):
     raise RuntimeError("Not implemented in StreamReader")
 
 
-  #############################################################################
   def seekFromEnd(self, numRecords):
     """Seeks to numRecords from the end and returns a bookmark to the new
     position.
@@ -464,7 +452,6 @@ class StreamReader(RecordStreamIface):
     raise RuntimeError("Not implemented in StreamReader")
 
 
-  ############################################################################
   def getFieldNames(self):
     """ Returns all fields in all inputs (list of plain names).
     NOTE: currently, only one input is supported
@@ -472,7 +459,6 @@ class StreamReader(RecordStreamIface):
     return [f[0] for f in self._streamFields]
 
 
-  ############################################################################
   def getFields(self):
     """ Returns a sequence of nupic.data.fieldmeta.FieldMetaInfo
     name/type/special tuples for each field in the stream.
@@ -480,13 +466,12 @@ class StreamReader(RecordStreamIface):
     return self._streamFields
 
 
-  ############################################################################
   def getBookmark(self):
     """ Returns a bookmark to the current position
     """
     return self._aggBookmark
 
-  #############################################################################
+
   def getResetFieldIdx(self):
     """ Index of the 'reset' field. """
     for i, field in enumerate(self._streamFields):
@@ -495,7 +480,6 @@ class StreamReader(RecordStreamIface):
     return None
 
 
-  #############################################################################
   def getTimestampFieldIdx(self):
     """ Index of the 'timestamp' field. """
     for i, field in enumerate(self._streamFields):
@@ -504,7 +488,6 @@ class StreamReader(RecordStreamIface):
     return None
 
 
-  #############################################################################
   def getSequenceIdFieldIdx(self):
     """ Index of the 'sequenceId' field. """
     for i, field in enumerate(self._streamFields):
@@ -513,7 +496,6 @@ class StreamReader(RecordStreamIface):
     return None
 
 
-  #############################################################################
   def getCategoryFieldIdx(self):
     """ Index of the 'category' field. """
     for i, field in enumerate(self._streamFields):
@@ -522,14 +504,12 @@ class StreamReader(RecordStreamIface):
     return None
 
 
-  #############################################################################
   def clearStats(self):
     """ Resets stats collected so far.
     """
     self._recordStore.clearStats()
 
 
-  #############################################################################
   def getStats(self):
     """ Returns stats (like min and max values of the fields).
 
@@ -556,27 +536,25 @@ class StreamReader(RecordStreamIface):
 
     return streamStats
 
-  #############################################################################
+
   def getError(self):
     """ Returns errors saved in the stream.
     """
     return self._recordStore.getError()
 
-  #############################################################################
+
   def setError(self, error):
     """ Saves specified error in the stream.
     """
     self._recordStore.setError(error)
 
 
-  #############################################################################
   def isCompleted(self):
     """ Returns True if all records have been read.
     """
     return self._recordStore.isCompleted()
 
 
-  #############################################################################
   def setCompleted(self, completed=True):
     """ Marks the stream completed (True or False)
     """
@@ -584,13 +562,11 @@ class StreamReader(RecordStreamIface):
     self._recordStore.setCompleted(completed)
 
 
-  #############################################################################
   def setTimeout(self, timeout):
     """ Set the read timeout """
     self._recordStore.setTimeout(timeout)
 
 
-  #############################################################################
   def flush(self):
     """ Flush the file to disk """
     raise RuntimeError("Not implemented in StreamReader")

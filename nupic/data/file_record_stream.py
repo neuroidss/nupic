@@ -23,9 +23,10 @@
 CSV file based implementation of a record stream
 
 FileRecordStream is class that can read and write .csv files that contain
-records. The file has 3 header lines that contain for each field the name, type
-and a special indicator for the fields that serve as the reset field,
-sequence id field and timestamp field. The other fields
+records. The file has 3 header lines that contain, for each field, the name
+(line 1), type (line 2), and a special indicator (line 3). The special indicator
+can indicate that the field specifies a reset, is a sequence ID, or is a
+timestamp for the record.
 
 The header lines look like:
 
@@ -38,7 +39,6 @@ second header line. The supported types are: int, float, string, bool, datetime
 
 The format for datetime fields is yyyy-mm-dd hh:mm:ss.us
 The 'us' component is microseconds.
-
 
 When reading a file the FileRecordStream will automatically read the header line
 and will figure out the type of each field and what are the timestamp, reset
@@ -77,11 +77,12 @@ from nupic.data.utils import (
                         serializeTimestamp,
                         serializeTimestampNoMS,
                         escape,
-                        unescape)
+                        unescape,
+                        parseSdr,
+                        serializeSdr)
 
 
 
-###############################################################################
 class FileRecordStream(RecordStreamIface):
   """ CSV file based RecordStream implementation
   """
@@ -94,9 +95,8 @@ class FileRecordStream(RecordStreamIface):
 
   # Private: file mode for opening file for reading
   _FILE_READ_MODE = 'rU'
-  
-  
-  #############################################################################
+
+
   def __init__(self, streamID, write=False, fields=None, missingValues=None,
                bookmark=None, includeMS=True, firstRecord=None):
     """ Constructor
@@ -193,7 +193,7 @@ class FileRecordStream(RecordStreamIface):
                       (streamID, len(names), len(types), len(specials)))
 
     # Verify standard file format
-    allowedTypes = ('string', 'datetime', 'int', 'float', 'bool')
+    allowedTypes = ('string', 'datetime', 'int', 'float', 'bool', 'sdr')
     for i, t in enumerate(types):
       # This is a temporary hack for the Precog milestone, which passes in a
       # type 'address' for address fields. Here we simply map the type "address"
@@ -245,7 +245,8 @@ class FileRecordStream(RecordStreamIface):
                float=floatOrNone,
                bool=parseBool,
                string=unescape,
-               datetime=parseTimestamp)
+               datetime=parseTimestamp,
+               sdr=parseSdr)
     else:
       if includeMS:
         datetimeFunc = serializeTimestamp
@@ -255,7 +256,8 @@ class FileRecordStream(RecordStreamIface):
                float=str,
                string=escape,
                bool=str,
-               datetime=datetimeFunc)
+               datetime=datetimeFunc,
+               sdr=serializeSdr)
 
     self._adapters = [m[t] for t in types]
 
@@ -279,8 +281,7 @@ class FileRecordStream(RecordStreamIface):
     # Dictionary to store record statistics (min and max of scalars for now)
     self._stats = None
 
-  
-  #############################################################################
+
   def __getstate__(self):
     d = dict()
     d.update(self.__dict__)
@@ -289,20 +290,19 @@ class FileRecordStream(RecordStreamIface):
     return d
 
 
-  #############################################################################
   def __setstate__(self, state):
     self.__dict__ = state
     self._file = None
     self._reader = None
     self.rewind()
 
-  #############################################################################
+
   def close(self):
     if self._file is not None:
       self._file.close()
       self._file = None
-        
-  ##############################################################################
+
+
   def rewind(self):
     """Put us back at the beginning of the file again)
     """
@@ -322,9 +322,7 @@ class FileRecordStream(RecordStreamIface):
     # Reset record count, etc.
     self._recordCount = 0
 
-    
-    
-  #############################################################################
+
   def getNextRecord(self, useCache=True):
     """ Returns next available data record from the file.
     
@@ -370,9 +368,8 @@ class FileRecordStream(RecordStreamIface):
         record.append(self._adapters[i](f))
 
     return record
-  
-  
-  #############################################################################
+
+
   def getRecordsRange(self, bookmark=None, range=None):
     """ Returns a range of records, starting from the bookmark. If 'bookmark'
     is None, then records read from the first available. If 'range' is
@@ -381,9 +378,8 @@ class FileRecordStream(RecordStreamIface):
     """
   
     raise Exception('getRecordsRange() is not supported for the file storage')
-  
-      
-  #############################################################################
+
+
   def getLastRecords(self, numRecords):
     """ Returns a tuple (successCode, recordsArray), where
         successCode - if the stream had enough records to return, True/False
@@ -396,12 +392,10 @@ class FileRecordStream(RecordStreamIface):
     raise Exception('getLastRecords() is not supported for the file storage')
 
 
-  #############################################################################
   def removeOldData(self):
     raise Exception('removeOldData is not supported in this class.')
 
-  
-  #############################################################################
+
   def appendRecord(self, record, inputBookmark=None):
     """ Saves the record in the underlying csv file.
         
@@ -437,7 +431,6 @@ class FileRecordStream(RecordStreamIface):
     self._recordCount += 1
     
 
-  #############################################################################
   def appendRecords(self, records, inputRef=None, progressCB=None):
     """ Saves multiple records in the underlying storage.
         
@@ -458,8 +451,7 @@ class FileRecordStream(RecordStreamIface):
       if progressCB is not None:
         progressCB()
 
-  
-  #############################################################################
+
   def getBookmark(self):
     """ Returns an anchor to the current position in the data. Passing this
     anchor to a constructor makes the current position to be the first
@@ -474,13 +466,11 @@ class FileRecordStream(RecordStreamIface):
     return json.dumps(rowDict)
 
 
-  #############################################################################
   def recordsExistAfter(self, bookmark):
     """Returns True iff there are records left after the  bookmark."""
     return (self.getDataRowCount() - self.getNextRecordIdx()) > 0
 
 
-  #############################################################################
   def seekFromEnd(self, numRecords):
     """Seeks to numRecords from the end and returns a bookmark to the new
     position.
@@ -489,7 +479,6 @@ class FileRecordStream(RecordStreamIface):
     return self.getBookmark()
 
 
-  ##############################################################################
   def setAutoRewind(self, autoRewind):
     """
     Controls whether getNext() should automatically rewind the source when EOF
@@ -502,7 +491,6 @@ class FileRecordStream(RecordStreamIface):
     self.rewindAtEOF = autoRewind
 
 
-  #############################################################################
   def getStats(self):
     """ Parse the file using dedicated reader and collect fields stats. Never
     called if user of FileRecordStream does not invoke getStats method.
@@ -563,32 +551,28 @@ class FileRecordStream(RecordStreamIface):
           break
 
     return self._stats
-    
-  
-  #############################################################################
+
+
   def clearStats(self):
     """ Resets stats collected so far.
     """
     self._stats = None
 
-  
-  #############################################################################
+
   def getError(self):
     """ Returns errors saved in the stream.
     """
     # CSV file version does not provide storage for the error information
     return None
-    
-  
-  #############################################################################
+
+
   def setError(self, error):
     """ Saves specified error in the stream.
     """
     # CSV file version does not provide storage for the error information
     return
-    
-  
-  #############################################################################
+
+
   def isCompleted(self):
     """ Returns True if all records are already in the stream or False
     if more records is expected.
@@ -597,7 +581,6 @@ class FileRecordStream(RecordStreamIface):
     return True
   
 
-  #############################################################################
   def setCompleted(self, completed=True):
     """ Marks the stream completed (True or False)
     """
@@ -605,15 +588,12 @@ class FileRecordStream(RecordStreamIface):
     return
   
   
-  
-  #############################################################################
   def getFieldNames(self):
     """ Returns an array of field names associated with the data.
     """
     return [f[0] for f in self._fields]
   
   
-  #############################################################################
   def getFields(self):
     """ Returns a sequence of nupic.data.fieldmeta.FieldMetaInfo
     name/type/special tuples for each field in the stream.
@@ -624,9 +604,6 @@ class FileRecordStream(RecordStreamIface):
       return copy.copy(self._fields)
     
     
-
-  #############################################################################
-  #############################################################################
   def _updateSequenceInfo(self, r):
     """Keep track of sequence and make sure time goes forward
 
@@ -679,8 +656,6 @@ class FileRecordStream(RecordStreamIface):
       self._currTime = r[self._timeStampIdx]
 
 
-
-  #############################################################################
   def _getStartRow(self, bookmark):
     """ Extracts start row from the bookmark information
     """
@@ -699,7 +674,6 @@ class FileRecordStream(RecordStreamIface):
       return bookMarkDict['currentRow']
   
 
-  #############################################################################
   def _getTotalLineCount(self):
     """ Returns:  count of ALL lines in dataset, including header lines
     """
@@ -709,15 +683,12 @@ class FileRecordStream(RecordStreamIface):
     return sum(1 for line in open(self._filename, self._FILE_READ_MODE))
   
 
-  
-  #############################################################################
   def getNextRecordIdx(self):
     """Returns the index of the record that will be read next from getNextRecord()
     """
     return self._recordCount
 
   
-  #############################################################################
   def getDataRowCount(self):
     """
     Returns:  count of data rows in dataset (excluding header lines)
@@ -737,20 +708,16 @@ class FileRecordStream(RecordStreamIface):
     return numDataRows
   
 
-  #############################################################################
   def setTimeout(self, timeout):
     """ Set the read timeout """
     pass
-  
-  
-  #############################################################################
+
+
   def flush(self):
     if self._file is not None:
       self._file.flush()
-  
-  
-  #############################################################################
-  #############################################################################
+
+
   def __enter__(self):
     """Context guard - enter
 
@@ -759,7 +726,6 @@ class FileRecordStream(RecordStreamIface):
     return self
 
 
-  #############################################################################
   def __exit__(self, yupe, value, traceback):
     """Context guard - exit
 
@@ -769,13 +735,11 @@ class FileRecordStream(RecordStreamIface):
     self.close()
 
 
-  #############################################################################
   def __iter__(self):
     """Support for the iterator protocol. Return itself"""
     return self
   
 
-  #############################################################################
   def next(self):
     """Implement the iterator protocol """
     record = self.getNextRecord()

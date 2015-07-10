@@ -46,8 +46,6 @@ from nupic.swarming import utils
 
 
 
-
-################################################################################
 class OPFModelRunner(object):
   """This class runs an a given Model"""
 
@@ -222,6 +220,7 @@ class OPFModelRunner(object):
       self._experimentDir)
     expIface = opfhelpers.getExperimentDescriptionInterfaceFromModule(
       descriptionPyModule)
+    expIface.normalizeStreamSources()
 
     modelDescription = expIface.getModelDescription()
     self._modelControl = expIface.getModelControl()
@@ -289,7 +288,6 @@ class OPFModelRunner(object):
     return (self._cmpReason, None)
 
 
-################################################################################
   def __runTaskMainLoop(self, numIters, learningOffAt=None):
     """ Main loop of the OPF Model Runner.
 
@@ -422,7 +420,6 @@ class OPFModelRunner(object):
       self._predictionLogger.close()
 
 
-################################################################################
   def __createModelCheckpoint(self):
     """ Create a checkpoint from the current model, and store it in a dir named
     after checkpoint GUID, and finally store the GUID in the Models DB """
@@ -448,7 +445,7 @@ class OPFModelRunner(object):
                       "checkpointID: %r", self._modelID, checkpointID)
     return
 
-############################################################################
+
   def __deleteModelCheckpoint(self, modelID):
     """
     Delete the stored checkpoint for the specified modelID. This function is
@@ -481,7 +478,6 @@ class OPFModelRunner(object):
     return
 
 
-################################################################################
   def _createPredictionLogger(self):
     """
     Creates the model's PredictionLogger object, which is an interface to write
@@ -500,8 +496,6 @@ class OPFModelRunner(object):
       self._predictionLogger.setLoggedMetrics(loggedMetrics)
 
 
-
-################################################################################
   def __getOptimizedMetricLabel(self):
     """ Get the label for the metric being optimized. This function also caches
     the label in the instance variable self._optimizedMetricLabel
@@ -526,14 +520,13 @@ class OPFModelRunner(object):
     return matchingKeys[0]
 
 
-################################################################################
   def _getMetricLabels(self):
     """
     Returns:  A list of labels that correspond to metrics being computed
     """
     return self.__metricMgr.getMetricLabels()
 
-################################################################################
+
   def _getFieldStats(self):
     """
     Method which returns a dictionary of field statistics received from the
@@ -556,7 +549,6 @@ class OPFModelRunner(object):
     return fieldStats
 
 
-################################################################################
   def _getMetrics(self):
     """ Protected function that can be overriden by subclasses. Its main purpose
     is to allow the the OPFDummyModelRunner to override this with deterministic
@@ -566,7 +558,7 @@ class OPFModelRunner(object):
     """
     return self.__metricMgr.getMetrics()
 
-################################################################################
+
   def _updateModelDBResults(self):
     """ Retrieves the current results and updates the model's record in
     the Model database.
@@ -602,7 +594,7 @@ class OPFModelRunner(object):
 
     return
 
-################################################################################
+
   def __updateJobResultsPeriodic(self):
     """
     Periodic check to see if this is the best model. This should only have an
@@ -657,7 +649,6 @@ class OPFModelRunner(object):
         break
 
 
-  ############################################################################
   def __checkIfBestCompletedModel(self):
     """
     Reads the current "best model" for the job and returns whether or not the
@@ -692,7 +683,7 @@ class OPFModelRunner(object):
 
     return self._isBestModel, jobResults, jobResultsStr
 
-  ############################################################################
+
   def __updateJobResults(self):
     """"
     Check if this is the best model
@@ -764,7 +755,6 @@ class OPFModelRunner(object):
         break
 
 
-  ############################################################################
   def _writePrediction(self, result):
     """
     Writes the results of one iteration of a model. The results are written to
@@ -784,7 +774,6 @@ class OPFModelRunner(object):
      self.__flushPredictionCache()
 
 
-  ############################################################################
   def __writeRecordsCallback(self):
     """ This callback is called by self.__predictionLogger.writeRecords()
     between each batch of records it writes. It gives us a chance to say that
@@ -795,7 +784,7 @@ class OPFModelRunner(object):
     #  worker's don't think that this model is orphaned.
     self._jobsDAO.modelUpdateResults(self._modelID)
 
-  ############################################################################
+
   def __flushPredictionCache(self):
     """
     Writes the contents of this model's in-memory prediction cache to a permanent
@@ -817,7 +806,6 @@ class OPFModelRunner(object):
     self.__predictionCache.clear()
 
 
-  ############################################################################
   def __deleteOutputCache(self, modelID):
     """
     Delete's the output cache associated with the given modelID. This actually
@@ -883,7 +871,7 @@ class OPFModelRunner(object):
 
     return PeriodicActivityMgr(requestedActivities=periodicActivities)
 
-  ############################################################################
+
   def __checkCancelation(self):
     """ Check if the cancelation flag has been set for this model
     in the Model DB"""
@@ -918,7 +906,7 @@ class OPFModelRunner(object):
       else:
         raise RuntimeError ("Unexpected stop reason encountered: %s" % (stopReason))
 
-  #########################################################################
+
   def __checkMaturity(self):
     """ Save the current metric value and see if the model's performance has
     'leveled off.' We do this by looking at some number of previous number of
@@ -955,7 +943,7 @@ class OPFModelRunner(object):
                                               self._MATURITY_NUM_POINTS,
                                               self._metricRegression._window)
 
-  ############################################################################
+
   def handleWarningSignal(self, signum, frame):
     """
     Handles a "warning signal" from the scheduler. This is received when the
@@ -970,7 +958,7 @@ class OPFModelRunner(object):
     """
     self._isInterrupted.set()
 
-  ############################################################################
+
   def __setAsOrphaned(self):
     """
     Sets the current model as orphaned. This is called when the scheduler is
