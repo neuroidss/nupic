@@ -28,7 +28,6 @@ explicitly updated to match the new results.
 import collections
 import csv
 import os
-import pkg_resources
 import shutil
 import unittest
 
@@ -42,8 +41,9 @@ class HotgymRegressionTest(unittest.TestCase):
 
   def testHotgymRegression(self):
     experimentDir = os.path.join(
-      os.path.dirname(__file__).partition("tests/integration/nupic/opf")[0],
-      "examples", "opf", "experiments", "multistep", "hotgym")
+      os.path.dirname(__file__).partition(
+        os.path.normpath("tests/integration/nupic/opf"))[0],
+        "examples", "opf", "experiments", "multistep", "hotgym")
 
     resultsDir = os.path.join(experimentDir, "inference")
     savedModelsDir = os.path.join(experimentDir, "savedmodels")
@@ -60,10 +60,10 @@ class HotgymRegressionTest(unittest.TestCase):
                          "steps=1:window=1000:field=consumption")
         lastRow = collections.deque(reader, 1)[0]
 
-      # Changes that affect prediction results will cause this test to fail.
-      # If the change is understood and reviewers agree that there has not been a
+      # Changes that affect prediction results will cause this test to fail. If
+      # the change is understood and reviewers agree that there has not been a
       # regression then this value can be updated to reflect the new result.
-      self.assertAlmostEqual(float(lastRow[14]), 5.92657292088)
+      self.assertAlmostEqual(float(lastRow[14]), 5.87970891453)
 
     finally:
       shutil.rmtree(resultsDir, ignore_errors=True)

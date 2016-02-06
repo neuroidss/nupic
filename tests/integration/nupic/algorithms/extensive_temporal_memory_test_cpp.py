@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env python
 # ----------------------------------------------------------------------
 # Numenta Platform for Intelligent Computing (NuPIC)
-# Copyright (C) 2013, Numenta, Inc.  Unless you have an agreement
+# Copyright (C) 2016, Numenta, Inc.  Unless you have an agreement
 # with Numenta, Inc., for a separate license for this software code, the
 # following terms and conditions apply:
 #
@@ -20,22 +20,10 @@
 # http://numenta.org/licenses/
 # ----------------------------------------------------------------------
 
-echo
-echo Running install-linux.sh...
-echo
+from nupic.bindings.algorithms import TemporalMemory
 
-# Verify cmake version
-cmake --version
+from extensive_temporal_memory_test import ExtensiveTemporalMemoryTest
 
-# Verify python version
-python --version
 
-pip --version
 
-# Build NuPIC
-cd ${TRAVIS_BUILD_DIR}
-pip install --user .[capnp]
-
-# Show nupic installation folder by trying to import nupic, if works, it prints
-# the absolute path of nupic.__file__, which the installation folder itself.
-python -c 'import sys;import os;import nupic.data;sys.stdout.write(os.path.abspath(os.path.join(nupic.data.__file__, "../..")))' || exit
+ExtensiveTemporalMemoryTest.TM_CLASS = TemporalMemory

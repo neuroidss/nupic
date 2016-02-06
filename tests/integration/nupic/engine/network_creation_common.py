@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------
 # Numenta Platform for Intelligent Computing (NuPIC)
-# Copyright (C) 2015, Numenta, Inc.  Unless you have an agreement
+# Copyright (C) 2016, Numenta, Inc.  Unless you have an agreement
 # with Numenta, Inc., for a separate license for this software code, the
 # following terms and conditions apply:
 #
@@ -24,23 +24,30 @@ import copy
 import csv
 import json
 import os
-
+import tempfile
 from pkg_resources import resource_filename
 
-from nupic.algorithms.anomaly import computeRawAnomalyScore
 from nupic.data.file_record_stream import FileRecordStream
 from nupic.engine import Network
 from nupic.encoders import MultiEncoder, ScalarEncoder, DateEncoder
+from nupic.regions.RecordSensor import RecordSensor
 from nupic.regions.SPRegion import SPRegion
 from nupic.regions.TPRegion import TPRegion
 
-_VERBOSITY = 0  # how chatty the demo should be
+try:
+  import capnp
+except ImportError:
+  capnp = None
+if capnp:
+  from nupic.proto import NetworkProto_capnp
+
+
+_VERBOSITY = 0  # how chatty the test should be
 _SEED = 1956  # the random seed used throughout
 _INPUT_FILE_PATH = resource_filename(
   "nupic.datafiles", "extra/hotgym/rec-center-hourly.csv"
 )
-_OUTPUT_PATH = "network-demo-output.csv"
-_NUM_RECORDS = 2000
+_NUM_RECORDS = 1000
 
 # Config field for SPRegion
 SP_PARAMS = {
@@ -97,7 +104,7 @@ def createEncoder():
 
 
 
-def createNetwork(dataSource):
+def createNetwork(dataSource, enableTP=False, temporalImp="py"):
   """Create the Network instance.
 
   The network has a sensor region reading data from `dataSource` and passing
@@ -133,21 +140,15 @@ def createNetwork(dataSource):
   network.link("spatialPoolerRegion", "sensor", "UniformLink", "",
                srcOutput="temporalTopDownOut", destInput="temporalTopDownIn")
 
-  # Add the TPRegion on top of the SPRegion
-  network.addRegion("temporalPoolerRegion", "py.TPRegion",
-                    json.dumps(TP_PARAMS))
+  if enableTP:
+    # Add the TPRegion on top of the SPRegion
+    TP_PARAMS["temporalImp"] = temporalImp
+    network.addRegion("temporalPoolerRegion", "py.TPRegion",
+                      json.dumps(TP_PARAMS))
 
-  network.link("spatialPoolerRegion", "temporalPoolerRegion", "UniformLink", "")
-  network.link("temporalPoolerRegion", "spatialPoolerRegion", "UniformLink", "",
-               srcOutput="topDownOut", destInput="topDownIn")
-
-  # Add the AnomalyRegion on top of the TPRegion
-  network.addRegion("anomalyRegion", "py.AnomalyRegion", json.dumps({}))
-
-  network.link("spatialPoolerRegion", "anomalyRegion", "UniformLink", "",
-               srcOutput="bottomUpOut", destInput="activeColumns")
-  network.link("temporalPoolerRegion", "anomalyRegion", "UniformLink", "",
-               srcOutput="topDownOut", destInput="predictedColumns")
+    network.link("spatialPoolerRegion", "temporalPoolerRegion", "UniformLink", "")
+    network.link("temporalPoolerRegion", "spatialPoolerRegion", "UniformLink", "",
+                 srcOutput="topDownOut", destInput="topDownIn")
 
   spatialPoolerRegion = network.regions["spatialPoolerRegion"]
 
@@ -157,68 +158,71 @@ def createNetwork(dataSource):
   # used for computing anomalies in a non-temporal model.
   spatialPoolerRegion.setParameter("anomalyMode", False)
 
-  temporalPoolerRegion = network.regions["temporalPoolerRegion"]
+  if enableTP:
+    temporalPoolerRegion = network.regions["temporalPoolerRegion"]
 
-  # Enable topDownMode to get the predicted columns output
-  temporalPoolerRegion.setParameter("topDownMode", True)
-  # Make sure learning is enabled (this is the default)
-  temporalPoolerRegion.setParameter("learningMode", True)
-  # Enable inference mode so we get predictions
-  temporalPoolerRegion.setParameter("inferenceMode", True)
-  # Enable anomalyMode to compute the anomaly score. This actually doesn't work
-  # now so doesn't matter. We instead compute the anomaly score based on
-  # topDownOut (predicted columns) and SP bottomUpOut (active columns).
-  temporalPoolerRegion.setParameter("anomalyMode", True)
+    # Enable topDownMode to get the predicted columns output
+    temporalPoolerRegion.setParameter("topDownMode", True)
+    # Make sure learning is enabled (this is the default)
+    temporalPoolerRegion.setParameter("learningMode", True)
+    # Enable inference mode so we get predictions
+    temporalPoolerRegion.setParameter("inferenceMode", True)
+    # Enable anomalyMode to compute the anomaly score. This actually doesn't work
+    # now so doesn't matter. We instead compute the anomaly score based on
+    # topDownOut (predicted columns) and SP bottomUpOut (active columns).
+    temporalPoolerRegion.setParameter("anomalyMode", True)
 
   return network
 
 
-def runNetwork(network, writer):
-  """Run the network and write output to writer.
+def saveAndLoadNetwork(network):
+  # Save network
+  proto1 = NetworkProto_capnp.NetworkProto.new_message()
+  network.write(proto1)
 
-  :param network: a Network instance to run
-  :param writer: a csv.writer instance to write output to
-  """
-  sensorRegion = network.regions["sensor"]
-  spatialPoolerRegion = network.regions["spatialPoolerRegion"]
-  temporalPoolerRegion = network.regions["temporalPoolerRegion"]
-  anomalyRegion = network.regions["anomalyRegion"]
+  with tempfile.TemporaryFile() as f:
+    proto1.write(f)
+    f.seek(0)
 
-  prevPredictedColumns = []
+    # Load network
+    proto2 = NetworkProto_capnp.NetworkProto.read(f)
+    loadedNetwork = Network.read(proto2)
 
-  for i in xrange(_NUM_RECORDS):
-    # Run the network for a single iteration
-    network.run(1)
+    # Set loaded network's datasource
+    sensor = network.regions["sensor"].getSelf()
+    loadedSensor = loadedNetwork.regions["sensor"].getSelf()
+    loadedSensor.dataSource = sensor.dataSource
 
-    # Write out the anomaly score along with the record number and consumption
-    # value.
-    anomalyScore = anomalyRegion.getOutputData("rawAnomalyScore")[0]
-    consumption = sensorRegion.getOutputData("sourceOut")[0]
-    writer.writerow((i, consumption, anomalyScore))
+    # Initialize loaded network
+    loadedNetwork.initialize()
+
+  return loadedNetwork
 
 
-if __name__ == "__main__":
-  dataSource = FileRecordStream(streamID=_INPUT_FILE_PATH)
+def createAndRunNetwork(testRegionType, testOutputName,
+                        checkpointMidway=False,
+                        temporalImp=None):
+    dataSource = FileRecordStream(streamID=_INPUT_FILE_PATH)
 
-  network = createNetwork(dataSource)
-  network.initialize()
+    if temporalImp is None:
+      network = createNetwork(dataSource)
+    else:
+      network = createNetwork(dataSource,
+                              enableTP=True,
+                              temporalImp=temporalImp)
+    network.initialize()
 
-  spRegion = network.getRegionsByType(SPRegion)[0]
-  sp = spRegion.getSelf().getAlgorithmInstance()
-  print "spatial pooler region inputs: {0}".format(spRegion.getInputNames())
-  print "spatial pooler region outputs: {0}".format(spRegion.getOutputNames())
-  print "# spatial pooler columns: {0}".format(sp.getNumColumns())
-  print
+    results = []
 
-  tmRegion = network.getRegionsByType(TPRegion)[0]
-  tm = tmRegion.getSelf().getAlgorithmInstance()
-  print "temporal memory region inputs: {0}".format(tmRegion.getInputNames())
-  print "temporal memory region outputs: {0}".format(tmRegion.getOutputNames())
-  print "# temporal memory columns: {0}".format(tm.numberOfCols)
-  print
+    for i in xrange(_NUM_RECORDS):
+      if checkpointMidway and i == (_NUM_RECORDS / 2):
+        network = saveAndLoadNetwork(network)
 
-  outputPath = os.path.join(os.path.dirname(__file__), _OUTPUT_PATH)
-  with open(outputPath, "w") as outputFile:
-    writer = csv.writer(outputFile)
-    print "Writing output to %s" % outputPath
-    runNetwork(network, writer)
+      # Run the network for a single iteration
+      network.run(1)
+
+      testRegion = network.getRegionsByType(testRegionType)[0]
+      output = testRegion.getOutputData(testOutputName).copy()
+      results.append(output)
+
+    return results
