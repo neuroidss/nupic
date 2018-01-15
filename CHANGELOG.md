@@ -1,5 +1,376 @@
 # Changelog
 
+## 1.0.3
+
+- Updated incorrect name for anomaly likelihood region. (#3770)
+
+## 1.0.2
+
+- Fixed BacktrackingTM serialization error (#3765)
+
+## 1.0.1
+
+- Fixed a bug in record sensor that prevented the usage of CoordinateEncoder. (#3754)
+
+## 1.0.0
+
+- Improved exception handling in /swarm/test_db.py (#3738)
+- DEVOPS-362 Remove unnecessary install script
+- DEVOPS-362 test removing dependency on install script entirely
+- DEVOPS-362 update install script
+- DEVOPS-362 Add initial version of missing install script
+- Added serialization guide to API docs. (#3737)
+- Put conditional around capnp for Windows
+- Complete new serialization in SpatialPooler
+- Catch nupic.core reference
+- NUP-2342: consolidate read/write into a single context
+- NUP-2342: Update examples to use capnp serialization
+- NUP-2341: Use capnp serialization for SDRClassifierDiff
+- NUP-2351: Remove TODOs from HTM Prediction Model test and fix  bugs exposed by this test
+- NUP-2351: Add serialization to KNNAnomalyClassifierRegion
+- NUP-2351: Fix KNNClassifier serialization
+- NUP-2349 Implemented testCapnpWriteRead test for PreviousValueModel OPF class. Implemented PreviousValueModel.getProtoType. Return instance from PreviousValueModel.read.
+- NUP-2349 Implemented capnp serialization of PreviousValueModel
+- Put capnp import checks in place for Windows
+- Add serialization tests for TMRegion
+- NUP-2463 Serialize inferenceArgs, learningEnabled, and inferenceEnabled in opf Model.
+- Add support for different TM types in TMRegion serialization
+- Added Serializable to API docs, and inheritence links
+- Fixed Next ID value in comment in model.capnp
+- NUP-2464 Integrated ModelProto support into opf TwoGramModel.
+- Fixed input to SP in docs algo example (#3708)
+- NUP-2464 Serialize numPredictions and inferenceType via ModelProto member of HTMPredictionModelProto.
+- Added Serializable to all classes with a capnp write function (#3710)
+- Safe import of capnp for moving average proto
+- getSchema returns prototype
+- Remove unused \_readArray
+- Rely on pycapnp/numpy native conversions in write/read
+- Add capnp conditionals for Windows
+- NUP-2351: Use dict directly instead of creating capnp message
+- Fixed Serializable extensions
+- Fix CPP breakages from changes
+- NUP-2351: Add capnp serialization to KNNClassifierRegion
+- Fix everything up to get serialization tests working with capnp serialization for BacktrackingTM
+- Added getSchema to MovingAverage
+- Added Serializable to all classes with a capnp write function
+- Finished up first pass implementation of BacktrackingTM serialization
+- NUP-2350: capnp serialization for TwoGramModel
+- NUP-2449 Completed implementation of HTMPredictionModel serialization tests.
+- NUP-2463 Implemented test (disabled) to demonstrate the bug "Predicted field and \_\_inferenceEnabled are not serialized by HTMPredictionModel.write"
+- OPF Guide cleanup and link fixes (#3700)
+- NUP-2355 Add new serialization to TestRegion
+- remove SVMClassifierNode (#3697)
+- handle scalar values in the sdr classifier region
+- NUP-2346: Add serialization to knn\_classifier
+- NUP-2458 Fixed and enabled SDRClassifierTest.testWriteReadNoComputeBeforeSerializing
+- NUP-2458 Implemented testWriteReadNoComputeBeforeSerializing in sdr\_classifier\_test.py that reproduces the "deque index out of bounds", but disabled the test, since it fails in a different way after the fix, most likely unrelated to the fix, which needs to be debugged
+- NUP-2398 Refactor test comparing different configurations
+- NUP-2458 Prevent index out of bounds when saving `patternNZHistory` after fewer than \_maxSteps input records have been processed.
+- NUP-2458 Moved HTMPredictionModel serialization test to integration/opf
+- NUP-2449 Implement simple serialization/deserialzation tests. This exposed a number of problems that need to be fixed before we can make further progress.
+- update sdr classifier doc
+
+
+## 0.8.0
+
+* Document ExperimentDescriptionAPI (#3679)
+* Update nupic.math API docs (#3677)
+* SP docs cleanup (#3671)
+* Allow multiple classifications for each record to SDRClassifier (#3669)
+* Updated BacktrackingTMCPP compute parameter name (#3667)
+* Fix HTMPredictionModel prediction using SDRClassifier (#3665)
+* Remove CLAClassifier (#3665)
+* Add capnp serialization to TMRegion (#3657)
+
+## 0.7.0
+
+**WARNING**: This release contains breaking changes described in
+https://discourse.numenta.org/t/warning-0-7-0-breaking-changes/2200
+
+* Stop calling the backtracking_tm tests "tm tests" (#3650)
+* Update hierarchy demo to fix regression
+* Clean up BacktrackingTM's public API (#3645)
+* Make region file names snake_case (part 7) (#3640)
+* Removed references to obsolete tm_py_fast shim (#3639)
+* Updated OPF Metric API docs (#3638)
+* updated __init__.py to include missing encoders (#3487)
+* Fixed anomaly likelihood doc problems. (#3629)
+* Updates swarming, some region code to snake_case (part 6) (#3627)
+* Fixed OPF util helpers module names. (#3625)
+* Complete RST docs for nupic.support (#3624)
+* Deleted nupic.support.features* (unused) (#3622)
+* Removed nupic.support.exceptions (unused) (#3620)
+* Proper snake_case for nupic.support (part 5) (#3618)
+* Snake case nupic.encoders (part 4) (#3614)
+* Moved opf_helpers module to helpers (#3610)
+* Removes unused code from nupic.support (#3616)
+* Applying snake_case module name standards (PART 3) (#3611)
+* Fixed support initLogging docstring params
+* Finished OPF utils and env docs
+* Documented OPF Basic Env
+* Documented OPF ENv
+* Documenting OPF Task Driver
+* Documenting OPF experiment runner
+* Removed OPF utils PredictionElement (#3604)
+* Partial doc of experiment description api
+* NUP-2429 Add .gitignore with first_order_0.csv to prevent accedental commits of this generated file.
+* Documented cluster_params canned model config
+* Documented OPF model exceptions
+* Finished doccing opf_utils
+* Documenting OPF utils
+* Removed predictedField from HTMPredictionModel constructor (#3600)
+* NUP-2420 Renamed tm_shim.py to BacktrackingTM_shim.py
+* Removes inputRef / bookmark params from appendRecord (#3597)
+* Documented nupic.data (#3593)
+* OPF Model docstrings (#3589)
+* Remove obsolete nupic.research.bindings check
+* Removed unimplemented abstract methods (#3596)
+* Removed WeatherJoiner code from old example (#3595)
+* Updated snakecase opf_utils in RST docs (#3585)
+* Renamed tm_ccp test so it runs
+* Moved research tm_cpp_test.py back into nupic.research
+* Removed base.Encoder.formatBits() (#3582)
+* Replace dump() with define __str__ in Encoders. Issue #1518 (#3559)
+* Complete encoder docstrings (#3579)
+* Removed nupic.research, moved contents to nupic.algorithms
+* move zip logic into 'build_script'
+* Add support for artifacts deployed to S3 named according to sha
+* Snake case module names PART 2 (#3561)
+* Remove old examples Part 2 (#3562)
+* NUP-2401: Check for prediction results discrepancies (#3558)
+* NUP-2397: rename TP* to TM* (#3555)
+* NUP-2405: quick-start guide for the Network API (#3557)
+* Snake case module names PART 1 (#3550)
+* NUP-2394: network API code example (#3520)
+* Remove old examples Part 1 (#3551)
+* Docs: InferenceShifter,ModelResult,SensorInput,InferenceType (#3549)
+* CLAModel name changed to HTMPredictionModel (#3516)
+* Updating FileRecordStream docstrings (#3545)
+* Fieldmeta docstrings (#3541)
+* Update KNNClassifier docstrings (#3535)
+* SDRClassifier docs, default config docs
+* Updates anomaly docstrings (#3537)
+* [NUP-2399] Added style guides to new guide (#3528)
+* NUP-2396 Allow SensorRegion to pass actValue and bucketIdx to SDRClassifierRegion
+* Added anomaly detection guide (#3521)
+* NUP-2389 Upgrade nupic.bindings dependency to 0.6.1 which has the requisite changes.
+* name change tpParams/tmEnable => tmParams/tmEnable (#3514)
+* NUP-2391: packages to document & progress tracking (#3517)
+* Quick Start Algorithms Section (#3512)
+* Quick Start
+* NUP-2389 Remove calls to Region::purgeInputLinkBufferHeads. Since we only support delay=0 in CLA models, we no longer need `purgeInputLinkBufferHeads`, because the new Link::compute logic in nupic.core now performs direct copy from src to dest for links with delay of 0.
+* Disable flatline hack in anomaly likelihood
+
+## 0.6.0
+
+* Touch init even if model params dir exists
+* Auto-add __init__.py when model parms created
+* Shift code from otherwise unused `nupic.engine.common_networks` to example where it's used.  Includes bugfix renaming `rawAnomalyScore` to `anomalyScore`
+* Explicitly import and use `engine_internal` in lieu of `engine` to avoid confusion, create `nupic.engine.OS` and `nupic.engine.Timer` by assignment rather than subclass
+* Change SparsePassThroughEncoder dtype error to ValueError
+* Fix for an unrelated change that resulted in numpy arrays being used in cpp implementation
+* Give better message for bad dtype to SparsePassThroughEncoder
+* Add test for passing float values for radius
+* Adds api docs for coordinate encoders
+* Cleanup CoordinateEncoder
+* Remove svm, cells4 tests that are moved to nupic.core.
+* Added missing anomaly stuff, fixed requirements
+* Moved sphinx deps out of requirements.txt
+* Fix hotgym_regression_test.py to make it work with nupic.core PR 1236.
+* Skip test when capnp is not available, such as windows as well as address feedback from Scott
+* Serialization base python class analagous to nupic.core Serializable c++ class
+* Adds a demo Jupyter notebook, useful for demonstrating usage of visualization framework and as an entrypoint for tinkering with different network topologies
+* Speed up SpatialPooler read method.
+* Rename normalProbability to tailProbability.
+* Use IterableCollection from engine_internal
+* Call Region.purgeInputLinkBufferHeads after compute() calls in CLAModel to integrate with the new delayed link implementation from nupic.core.
+* rename maxBoost to boostStrength in hotgym example
+* Disable backward compatibility serialization test
+* remove minPctActiveDutyCycle parameter form SP compatability test
+* update expected result in hotgym, result change due to different rounding rules in boosting
+* eliminate minPctActiveDutyCycle from spatial pooler
+* Rename maxBoost to BoostStrength
+* Stop changing the overlaps to do tie-breaking
+* Stop trying to get identical boost factors between py and cpp
+* set maxBoost in expdescriptionapi
+* update sp_overlap_test to use global inhibition
+* slight simplification of boostFactor calculation
+* Implement update boost factors local and global
+* Avoid floating point differences with C++ SpatialPooler
+* run C++ SP in spatial_pooler_boost_tests
+* update spatial pooler boost test
+* update boosting rules for spatial pooler
+* fix bug in setPotential
+* modified SP boosting rule
+
+## 0.5.7
+
+* Remove tests moved to nupic.core and update version to latest bindings release.
+* Update hello_tm.py
+* Removed linux and gcc from Travis build matrix
+* Makes `anomaly_likelihood.py` compliant to Python3
+* Update env vars and paths to simplify the AV configuration and installation.
+* Cleanup references to nupic.bindings and old CI code for manually fetching nupic.bindings since it should be found on PyPI without doing anything special.
+
+## 0.5.6
+
+* Since manylinux nupic.bindings wheel 0.4.10 has now been released to PyPi, we no longer need to install nupic.bindings from S3.
+* fix logic in _getColumnNeighborhood
+* Bugfix in flatIdx reuse after a segment is destroyed
+* Change private _burstColumn class method signature to accept a cellsForColumn argument in lieu of a cellsPerColumn argument.  Move the calculation that otherwise depends on cellsPerColumn into the instance method.
+* TM: Support extensibility by using traditional methods
+* Update expected error for topology changes
+* Update expected hotgym result for topology changes
+* Adds RELEASE.md with documentation for releasing NuPIC.
+* Match nupic.core's SP neighborhood ordering.
+* Update inhibition comments and docstrings.
+* Introduce mechanism by which already-installed pre-release versions of nupic.bindings are ignored during installation
+* Assign self.connections value from self.connectionsFactory() rather than direct usage of Connections constructor. Allows better extensibility should the user want to change some aspect of the creation of the connections instance in a subclass
+* Removed obsolete directory src/nupic/bindings/
+* Remove the notion of "destroyed" Segments / Synapses
+* Enable proper subclassing by converting staticmethods that referenced `TemporalMemory` to classmethods that reference their class.
+* Fixup TemporalMemory.write() to handle columnDimensions as tuples.
+* Initialize columnDimensions as a tuple in test to reflect common convention.  This forces the TemporalMemoryTest.testWriteRead test to fail in its current state.
+* Store "numActivePotentialSynapses". No more "SegmentOverlap".
+* Add a lot more scenarios to the TM perf benchmark
+* Moved audiostream example to htm-community
+* Safer "addToWinners" value. Play nicely with surgical boosting.
+* Bugfix: With no stimulus threshold, still break ties when overlaps=0
+* Clean up trailing whitespace and tabs
+* Properly apply the stimulus threshold
+* Add test for new "learn on predicted segments" behavior
+* Split compute into activateCells and activateDendrites
+* Grow synapses in predicted columns, not just bursting columns
+* Removed bundled get-pip.py and instead fetch version copy from S3
+* Removed .nupic_modules and now rely on versioned release of nupic.bindings on PyPI
+* averagingWindow size updated to improve HTM scores for RES-296
+* Build system updates for Bamboo (Linux), Travis (OS X), and AppVeyor (Windows)
+* Added nyc taxi example for anomaly detection
+
+## 0.5.5
+
+* Renamed a misclassed class name from ConnectionsTest to GroupByTest
+* not _ is => is not and fixes groupby comment and passes integration tests
+* overhaul to groupby, now 10% faster than current implementation
+* NUP-2299 Install specific versions of pip, setuptools, and wheel.
+* NUP-2299 Added platform-conditional dependency on pycapnp==0.5.8 using PEP-508.
+* lazy group_by and changes to GroupByGenerator
+* perf improvement to segment comparison in compute activity
+* 100 % increase in spped
+* small perf changes
+* demonstrate that compatability test works with predictedSegmentDec not 0.0
+* fixes subtle bug in numSegments that caused integration tests to fail
+* fixes bug where minIdx could be passed as a float rather than an int
+* skip serialization test if capnp is not installed
+* lints and updates comments in group_by.py and group_by_tests.py
+* gets same results as c++ temporal memory after group_by changes
+* ports group_by tests and they pass
+* adds groupByN utility function for use in TM
+* all connections tests written and passing, moved some stuff around and added missing function to connections
+* started porting new connections tests and minor changes to connections.py
+* improves permanence >= testing in computeActivity
+* confirmed python implementation is same as cpp version. Needs better perf now
+* adds back AnomalyRegion and Anomaly class in anomaly.py and related tests
+* fixes bug in growSynapses, almost exactly the same
+* Updated core SHA and default SDR classifier implementation
+* Updated SDRClassifier factory and region to handle cpp
+* changed input name from value to metricValue
+* updates variables names in anomaly_likelihood.py and AnomalyLikelihoodRegion
+* adds new connections methods
+* create new methods for creating/destroying synapses/segments
+* continues change of connections datastructures
+* move raw anomaly calculation back to nupic.algorithms.anomaly
+* Finished swarming/hypersearch separation
+* Moved base hypersearch classes to hypersearch
+* Moved experimentutils to nupic.swarming
+* Updated SDR classifier internals
+* calculate raw anomly score in KNNAnomalyClassifier
+* removes anomaly.py dependency in network_api_demo.py
+* changes how TMRegion computes prevPredictdColumns and updates clamodel
+* Install pip from local copy, other simplifications
+* Fixup PYTHONPATH to properly include previously-defined PYTHONPATH
+* adds pseudocode to core functions
+* continues implementation of AnomalyLikelihoodRegion
+* Limit tests to unit after ovverriding pytest args on cli
+* DEVOPS-85 OS X build infrastructure for Bamboo CI environment
+* replaces segmentCMP with lambda and updates docstrings
+* uses arrays instead of dicts in computeActivity
+* Corrections to examples in tm_high_order.py
+* incorporates binary search into the algorithm where applicable
+* remove outdated nab unit tests
+* use Q function
+* Corrections to examples in tm_high_order.py
+* change to column generator
+* Added tm_high_order.py to show examples of the temporal memory.
+* Fixed conversion bug in SDRClassifier serialization
+* Fixed patternNZ proto writing.
+* Slight fix for pattern history handling in sdr classifier
+* Small fix on SDR classifier
+* Better fix for #3172, using the initialize() function and checking if _sdrClassifier is set
+* Updated learning rate for SDR classifier + slight changes to the error ranges in OPF test
+* Updated hotgym test with actual value and implemented first fix for OPF test
+* Updated tests and examples with SDR classifier
+* Finished updating examples with SDR classifier.
+* Updated hotgym and general anomaly examples with SDR classifier.
+* Updates pycapnp to 0.5.8
+* test_db-fixes avoids printing user password in plaintext
+* test_db-fixes updates database and table name
+* Corrections made to the spatial pooler tutorial.
+* changes maxBoost default value to 1.0
+* fixes connection tests and prints config file used in test_db.py
+* Moved back overlap accesors test for spatial_pooler from API tests to unit tests.
+* Added tutorial script for the spatial pooler. Modified README file accordingly.
+* Moved the unit test for SP overlap accesors to API tests.
+
+## 0.5.4
+
+* Added overlap accessors to spatial_pooler.py plus unit tests. (Code style corrected)
+* Updated VERSION in Spatial Pooler and added backward compatibility in setstate()
+* Added members overlaps and boostedOverlaps to SpatialPooler class.
+* Addition of overlaps and boostedOverlaps members to SpatialPooler class plus unit tests.
+* Added docs for return type in RDSE internal func.
+* tm_cpp with tuned parameters
+* RES-215 Changes to add params for new TM subclass for NAB
+* Remove main function from SDRClassifierRegion
+* remove unused methods from SDRClassifierRegion
+* Add simple end-to-end integration test for SDRClassifierRegion
+* use string split instead of eval to parse strings
+* correct inconsistent error msg in sdr_classifier_factory.py
+* Fix readWrite test of SDR classifier
+* Add SDRClassifier Region to pyRegions
+* Initial implementation of SDRClassifier Region
+* implement SDR classifier factory
+* Add capnp proto for SDR classifier region
+* Add default value for SDR classifier implementation in nupic-default.xml
+
+## 0.5.3
+
+* Default DATETIME columns to NULL in ClientJobsDAO for compatibility across mysql versions. As of mysql 5.7.8, values of 0 are not allowed for DATETIME columns, and CURRENT_TIMESTAMP is semantically inappropriate for those columns.
+* Suppress this optional dependency on matplotlib without logging, because python logging implicitly adds the StreamHandler to root logger when calling `logging.debug`, etc., which may undermine an application's logging configuration
+* Bugfix: Write the 'actualValues' to the output, don't reassign the output
+* Fixed Username Regex in ClientJobsDAO
+* cleaned up region a bit to make it compliant with numenta's coding guidelines.
+
+## 0.5.2
+
+* Fixe to GCE to return the right number of scalars when altitude is missing.
+
+## 0.5.1
+
+* Improves SDR classifier and tests
+* Modify the continuous online learning test
+* Add 3 tests on multiple item prediction
+* Fix test_pFormatArray
+* Implement SDR classifier in NuPIC
+* Make the 'arrayTypes' list more informative
+* Add getParameter/setParameter support for Bool and BoolArray
+* Improved anomaly params (from NAB)
+* Added minSparsity option
+* Get the encoder's outputWidth via parameter
+* Use nupic.core encoders from nupic via the Network API
+* Fix bugs and inconsistencies in the custom region demo
+* Adds BINDINGS_VERSION envvar to wheel filename (for iterative builds)
+
 ## 0.5.0
 
 * Removes references to FastTemporalMemory.
@@ -40,8 +411,8 @@
 * Change temporalImp to tm_py for both networks and add comment about it being a temporary value until C++ TM is implemented
 * Refactored to remove common code between network_checkpoint_test.py and temporal_memory_compatibility_test.py
 * Use named constants from nupic.data.fieldmeta in aggregator module instead of naked constants.
-* Fix AttributeError: 'TPShim' object has no attribute 'topDownCompute'
-* Support more parameters in TPShim
+* Fix AttributeError: 'TMShim' object has no attribute 'topDownCompute'
+* Support more parameters in TMShim
 * Serialize remaining fields in CLAModel using capnproto
 * Enforce pyproj==1.9.3 in requirements.txt
 * Use FastCLAClassifier read class method instead of instance method
@@ -184,12 +555,12 @@
 * Merge remote-tracking branch 'upstream/master'
 * Rename testconsoleprinter_output.txt so as to not be picked up by py.test as a test during discovery
 * likelihood test: fix raw-value must be int
-* Fix broken TPShim
-* Revert "Fix TP Shim"
+* Fix broken TMShim
+* Revert "Fix TM Shim"
 * Anomaly serialization verify complex anomaly instance
 * Likelihood pickle serialization test
 * MovingAverage pickle serialization test
-* Fix TP Shim
+* Fix TM Shim
 * Removed stripUnlearnedColumns-from-SPRegion
 * Updated comment describing activeArray paramater of stripUnlearnedColumns method in SP
 * Revert "MovingAvera: remove unused pickle serialization method"
@@ -272,7 +643,7 @@
 * Remove FDRCSpatial2.py
 * Replace the use of FDRCSpatial2 to SpatialPooler
 * SP profile implemented from tp_large
-* TP profile: can use args from command-line, random data used
+* TM profile: can use args from command-line, random data used
 * Adds AnomalyRegion for computing the raw anomaly score. Updates the network api example to use the new anomaly region. Updates PyRegion to have better error messages.
 * Remove FlatSpatialPooler
 * Add delete segment/synapse functionality to Connections data structure
@@ -377,7 +748,7 @@
 * GCE now encodes altitude using a 3D coordinate system.
 * Distributing `*.i` files from `nupic.bindings` in binary packages.
 * Updates test entry points to pure python. README instructions for running tests were updated.
-* Missing configuration files are no longer ignored. A runtime exception is raised immediately when an expected configuration file is not found. 
+* Missing configuration files are no longer ignored. A runtime exception is raised immediately when an expected configuration file is not found.
 * Updated deployment logic to account for both deployment scenarios (iterative and release).
 * Configured pypi deployment on all branches with tags.
 * Added pypi deployment configuration for binary releases.

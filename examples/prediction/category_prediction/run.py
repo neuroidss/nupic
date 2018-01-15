@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # ----------------------------------------------------------------------
 # Numenta Platform for Intelligent Computing (NuPIC)
 # Copyright (C) 2013, Numenta, Inc.  Unless you have an agreement
@@ -27,7 +26,7 @@ from collections import defaultdict
 import re
 
 from nupic.data.inference_shifter import InferenceShifter
-from nupic.frameworks.opf.modelfactory import ModelFactory
+from nupic.frameworks.opf.model_factory import ModelFactory
 
 
 # Prepare textfile and tokenize:
@@ -64,7 +63,7 @@ outfile.close()
 # Create and run the model:
 
 MODEL_PARAMS = {
-  "model": "CLA",
+  "model": "HTMPrediction",
   "version": 1,
   "predictAheadTime": None,
   "modelParams": {
@@ -96,8 +95,8 @@ MODEL_PARAMS = {
         "synPermInactiveDec": 0.01,
     },
 
-    "tpEnable" : True,
-    "tpParams": {
+    "tmEnable" : True,
+    "tmParams": {
       "verbosity": 0,
         "columnCount": 2048,
         "cellsPerColumn": 32,
@@ -118,9 +117,9 @@ MODEL_PARAMS = {
         "pamLength": 1,
       },
       "clParams": {
-        "implementation": "cpp",
-        "regionName" : "CLAClassifierRegion",
-        "clVerbosity" : 0,
+        "implementation": "py",
+        "regionName" : "SDRClassifierRegion",
+        "verbosity" : 0,
         "alpha": 0.0001,
         "steps": "1",
       },

@@ -22,20 +22,20 @@
 ## This file defines parameters for a prediction experiment.
 
 import os
-from nupic.frameworks.opf.expdescriptionhelpers import importBaseDescription
+from nupic.frameworks.opf.exp_description_helpers import importBaseDescription
 
 # the sub-experiment configuration
 config = \
-{ 
-  'dataSource': 'file://' + os.path.join(os.path.dirname(__file__), 
+{
+  'dataSource': 'file://' + os.path.join(os.path.dirname(__file__),
                                          '../datasets/category_0.csv'),
-                                         
+
   'errorMetric': 'avg_err',
-  
-  'modelParams': { 
+
+  'modelParams': {
     'sensorParams': { 'verbosity': 0},
-    'clParams': { 
-      'clVerbosity': 0,
+    'clParams': {
+      'verbosity': 0,
     },
   }
 }
